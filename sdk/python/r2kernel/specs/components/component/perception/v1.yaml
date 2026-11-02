@@ -1,0 +1,15 @@
+version: 1
+id: component.perception.v1
+kind: component
+name: Perception Controller
+description: Controller component that provides perception query services to higher-level control or application subsystems.
+conformance_apis:
+  - api.perception.query.v1
+recommended_apis:
+  - api.perception.stream.v1
+spatial:
+  participation: required
+  ports:
+    sensor:
+      direction: import
+      semantic: observation_frame

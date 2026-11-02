@@ -1,0 +1,125 @@
+version: 1
+id: msg.sensor.lidar.v1
+kind: message_set
+description: Native LiDAR scan formats, samples, transfer parts, and source Control messages.
+imports:
+  msg.control: v1
+  msg.stream: v1
+messages:
+  LidarFieldDescriptor:
+    description: One field in a packed native return record.
+    fields:
+    - name: name
+      type: string
+    - name: semantic
+      type: string
+      description: Stable field meaning such as range, intensity, return_id, or time_offset_ns.
+    - name: scalar_type
+      type: string
+      description: Supported packed scalar type, explicitly defined by the selected profile.
+    - name: offset_bytes
+      type: uint32
+    - name: unit
+      type: string
+  LidarStreamFormat:
+    description: >-
+      Immutable native scan format. The field descriptors preserve sensor return,
+      channel, unit, and per-return timing semantics without forcing XYZ conversion.
+    fields:
+    - name: frame_id
+      type: string
+    - name: layout_kind
+      type: string
+      description: angular_scan or native_records.
+    - name: angle_min_rad
+      type: float64
+      optional: true
+    - name: angle_increment_rad
+      type: float64
+      optional: true
+    - name: channel_count
+      type: uint32
+    - name: returns_per_measurement
+      type: uint32
+    - name: record_stride_bytes
+      type: uint32
+    - name: endianness
+      type: string
+      description: little or big byte order for packed multibyte return fields.
+    - name: fields
+      type: vector<LidarFieldDescriptor>
+    - name: scan_duration_ns
+      type: int64
+    - name: time_reference
+      type: string
+      description: scan_start or scan_end.
+    - name: invalid_return_rule
+      type: string
+      description: Explicit invalid-return representation or declaration that the device has none.
+    - name: loss_policy
+      type: string
+      description: lossless or bounded_error.
+    - name: maximum_range_error_m
+      type: float32
+      optional: true
+    - name: maximum_intensity_error
+      type: float32
+      optional: true
+    - name: preserves_return_order
+      type: bool
+    - name: codec
+      type: msg.stream/CodecDescriptor
+      optional: true
+    - name: limits
+      type: msg.stream/StreamLimits
+  LidarScan:
+    description: Complete native LiDAR scan with packed records in the declared layout.
+    fields:
+    - name: header
+      type: msg.stream/TransferPartHeader
+    - name: format
+      type: LidarStreamFormat
+    - name: measurement_count
+      type: uint32
+    - name: payload_bytes
+      type: bytes
+  LidarTransferPart:
+    description: Native scan identity and one bounded part of the packed scan payload.
+    fields:
+    - name: header
+      type: msg.stream/TransferPartHeader
+    - name: chunk
+      type: msg.stream/EncodedChunk
+    - name: format
+      type: LidarStreamFormat
+      optional: true
+    - name: measurement_count
+      type: uint32
+  LidarCycleRequest:
+    description: Requests a prepared LiDAR scan for a sample-exchange cycle.
+    fields:
+    - name: cycle
+      type: msg.control/ControlCycle
+    - name: after_sample_id
+      type: int64
+      optional: true
+    - name: after_unit_sequence
+      type: int64
+      optional: true
+    - name: resync_required
+      type: bool
+      optional: true
+  LidarCycleResponse:
+    description: One prepared native scan part or a normal no-new-sample result.
+    fields:
+    - name: cycle
+      type: msg.control/ControlCycle
+    - name: status
+      type: string
+      description: sample_available, no_new_sample, resync_required, unsupported_format, or device_error.
+    - name: part
+      type: LidarTransferPart
+      optional: true
+    - name: detail
+      type: string
+      optional: true

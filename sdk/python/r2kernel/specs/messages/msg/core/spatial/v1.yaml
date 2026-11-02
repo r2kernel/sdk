@@ -1,0 +1,112 @@
+version: 1
+id: msg.core.spatial.v1
+kind: message_set
+description: Canonical shared spatial message set for base math types, semantic physical quantities, and rigid-body spatial
+  quantities used across robotics domains.
+messages:
+  Vector3:
+    description: Generic free 3-axis vector used when the surrounding type carries the semantics of the quantity.
+    fields:
+    - name: x
+      type: float32
+    - name: y
+      type: float32
+    - name: z
+      type: float32
+  Quaternion:
+    description: Quaternion orientation expressed as x, y, z, w.
+    fields:
+    - name: x
+      type: float32
+    - name: y
+      type: float32
+    - name: z
+      type: float32
+    - name: w
+      type: float32
+  Position:
+    description: 3D position point in meters, kept separate from Vector3 because it represents a location rather than a free
+      vector.
+    fields:
+    - name: x
+      type: float32
+    - name: y
+      type: float32
+    - name: z
+      type: float32
+  Pose:
+    description: Pure rigid pose value. The owning message or API contract declares the frame in which it is expressed.
+    fields:
+    - name: position
+      type: Position
+      description: Position point of the pose origin.
+    - name: orientation
+      type: Quaternion
+      description: Quaternion orientation of the pose.
+  Covariance6x6:
+    description: Fixed 6x6 covariance matrix container for spatial estimates.
+    fields:
+    - name: values
+      type: array<float32, 36>
+      description: Row-major covariance entries. The owning message defines the state ordering associated with the six dimensions.
+  Force:
+    description: 3-axis linear force. Field names stay x, y, z because the surrounding type already carries the physical meaning.
+    fields:
+    - name: x
+      type: float32
+    - name: y
+      type: float32
+    - name: z
+      type: float32
+  Torque:
+    description: 3-axis torque (moment) vector. Field names stay x, y, z; angular meaning comes from the surrounding type
+      rather than rx, ry, rz naming.
+    fields:
+    - name: x
+      type: float32
+    - name: y
+      type: float32
+    - name: z
+      type: float32
+  Wrench:
+    description: Pure rigid-body wrench value. The owning message or API contract declares its expression frame.
+    fields:
+    - name: force
+      type: Force
+      description: Linear force component.
+    - name: torque
+      type: Torque
+      description: Torque component about the same frame axes.
+  Twist:
+    description: Pure rigid-body spatial velocity. The owning message or API contract declares its expression frame.
+    fields:
+    - name: linear
+      type: Vector3
+      description: Linear velocity of the chosen reference point.
+    - name: angular
+      type: Vector3
+      description: Angular velocity of the same rigid body.
+  Accel:
+    description: Pure rigid-body spatial acceleration. The owning message or API contract declares its expression frame.
+    fields:
+    - name: linear
+      type: Vector3
+      description: Linear acceleration component.
+    - name: angular
+      type: Vector3
+      description: Angular acceleration component.
+  Inertia:
+    description: Symmetric inertia tensor components about a common reference.
+    fields:
+    - name: ixx
+      type: float32
+    - name: iyy
+      type: float32
+    - name: izz
+      type: float32
+    - name: ixy
+      type: float32
+    - name: ixz
+      type: float32
+    - name: iyz
+      type: float32

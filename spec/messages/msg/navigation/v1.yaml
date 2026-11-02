@@ -1,0 +1,58 @@
+version: 1
+id: msg.navigation.v1
+kind: message_set
+description: Navigation payload family for goal-based autonomous motion.
+imports:
+  msg.core.spatial: v1
+messages:
+  NavigationPath:
+    description: Ordered path as a sequence of target poses.
+    fields:
+      - name: frame_id
+        type: string
+        description: Common reference frame for all waypoints.
+      - name: waypoints
+        type: vector<msg.core.spatial/Pose>
+  NavigateToPoseRequest:
+    description: Goal request for autonomous navigation to a single pose.
+    fields:
+      - name: frame_id
+        type: string
+        description: Reference frame for target_pose.
+      - name: target_pose
+        type: msg.core.spatial/Pose
+      - name: behavior_id
+        type: string
+        optional: true
+  FollowPathRequest:
+    description: Goal request for following an explicit path.
+    fields:
+      - name: path
+        type: NavigationPath
+      - name: controller_id
+        type: string
+        optional: true
+  NavigationFeedback:
+    description: Progress feedback for a running navigation task.
+    fields:
+      - name: state
+        type: string
+      - name: remaining_distance
+        type: float32
+        optional: true
+  NavigationResult:
+    description: Result body for a completed navigation task.
+    fields:
+      - name: completed
+        type: bool
+      - name: detail
+        type: string
+        optional: true
+  NavigationState:
+    description: Summary state for a navigation subsystem or running goal.
+    fields:
+      - name: state
+        type: string
+      - name: active_goal_id
+        type: string
+        optional: true

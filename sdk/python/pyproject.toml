@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel>=0.43"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "r2kernel-client"
+version = "1.0.0"
+description = "Python r2kernel-client SDK for R2Kernel."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "R2Kernel Team" }]
+license = { text = "Apache-2.0" }
+dependencies = [
+    "numpy",
+    "PyYAML",
+    "posix_ipc; platform_system != 'Windows'",
+]
+
+[project.optional-dependencies]
+rotation = [
+    "scipy",
+]
+test = [
+    "pytest>=8.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["r2kernel*"]
+
+[tool.setuptools.package-data]
+"r2kernel.ffi" = ["lib/*"]
+"r2kernel" = [
+    "specs/**/*.yaml",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

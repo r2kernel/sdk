@@ -1,0 +1,123 @@
+version: 1
+id: msg.sensor.pointcloud.v1
+kind: message_set
+description: Typed point-cloud field layouts, samples, transfer parts, and source Control messages.
+imports:
+  msg.control: v1
+  msg.stream: v1
+messages:
+  PointFieldDescriptor:
+    description: One named field in a packed point record.
+    fields:
+    - name: name
+      type: string
+    - name: semantic
+      type: string
+      description: Stable meaning such as x, y, z, intensity, ring, or time_offset_ns.
+    - name: scalar_type
+      type: string
+      description: Supported packed scalar type, explicitly defined by the selected profile.
+    - name: count
+      type: uint32
+    - name: offset_bytes
+      type: uint32
+    - name: unit
+      type: string
+  PointCloudFormat:
+    description: >-
+      Immutable field layout, reference frame, packed byte order, and compression policy.
+      Lossy profiles declare positional error and point-order/count effects.
+    fields:
+    - name: coordinate_frame_id
+      type: string
+    - name: endianness
+      type: string
+      description: little or big.
+    - name: record_stride_bytes
+      type: uint32
+    - name: fields
+      type: vector<PointFieldDescriptor>
+    - name: codec
+      type: msg.stream/CodecDescriptor
+      optional: true
+    - name: loss_policy
+      type: string
+      description: lossless or bounded_error.
+    - name: maximum_position_error_m
+      type: float32
+      optional: true
+    - name: preserves_point_order
+      type: bool
+    - name: preserves_point_count
+      type: bool
+    - name: maximum_point_count_delta
+      type: uint32
+      optional: true
+    - name: invalid_point_policy
+      type: string
+      description: Preserve invalid coordinates/flags or explicitly declare an allowed lossy transformation.
+    - name: limits
+      type: msg.stream/StreamLimits
+  PointCloudSample:
+    description: Complete reassembled point-cloud payload and sample organization.
+    fields:
+    - name: header
+      type: msg.stream/TransferPartHeader
+    - name: format
+      type: PointCloudFormat
+    - name: width
+      type: uint32
+    - name: height
+      type: uint32
+    - name: point_count
+      type: uint32
+    - name: is_dense
+      type: bool
+    - name: payload_bytes
+      type: bytes
+  PointCloudTransferPart:
+    description: Point-cloud sample identity, organization, optional changed format, and one bounded payload chunk.
+    fields:
+    - name: header
+      type: msg.stream/TransferPartHeader
+    - name: chunk
+      type: msg.stream/EncodedChunk
+    - name: format
+      type: PointCloudFormat
+      optional: true
+    - name: width
+      type: uint32
+    - name: height
+      type: uint32
+    - name: point_count
+      type: uint32
+    - name: is_dense
+      type: bool
+  PointCloudCycleRequest:
+    description: Requests a prepared point-cloud sample for a sample-exchange cycle.
+    fields:
+    - name: cycle
+      type: msg.control/ControlCycle
+    - name: after_sample_id
+      type: int64
+      optional: true
+    - name: after_unit_sequence
+      type: int64
+      optional: true
+    - name: resync_required
+      type: bool
+      optional: true
+  PointCloudCycleResponse:
+    description: One prepared typed point-cloud part or a normal no-new-sample result.
+    fields:
+    - name: cycle
+      type: msg.control/ControlCycle
+    - name: status
+      type: string
+      description: sample_available, no_new_sample, resync_required, unsupported_format, or device_error.
+    - name: part
+      type: PointCloudTransferPart
+      optional: true
+    - name: detail
+      type: string
+      optional: true

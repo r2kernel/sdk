@@ -1,0 +1,10 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: interface_digital_server
+  role: component
+
+provides:
+  digital_io:
+    contract: api.io.digital.output.v1

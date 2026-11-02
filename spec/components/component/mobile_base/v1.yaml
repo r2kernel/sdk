@@ -1,0 +1,22 @@
+version: 1
+id: component.mobile_base.v1
+kind: component
+name: Mobile Base Controller
+description: Wheeled mobile-base controller for platform velocity control, state, and optional odometry or differential-drive surfaces.
+conformance_apis:
+  - api.locomotion.velocity.v1
+  - api.locomotion.velocity_reference.v1
+  - api.locomotion.mobile_base.state.v1
+recommended_apis:
+  - api.locomotion.odometry.v1
+optional_apis:
+  - api.locomotion.diff_drive.v1
+spatial:
+  participation: required
+  ports:
+    reference:
+      direction: export
+      semantic: odometry_reference
+    body:
+      direction: export
+      semantic: mobile_body

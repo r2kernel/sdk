@@ -1,0 +1,18 @@
+kind: r2kernel.deployment
+version: 1
+
+subsystems:
+  control_controller:
+    manifest: ./python/control_controller.subsystem.yaml
+  control_gateway:
+    manifest: ./python/control_gateway.subsystem.yaml
+  control_controller_cpp:
+    manifest: ./cpp/control_controller_cpp.subsystem.yaml
+  control_gateway_cpp:
+    manifest: ./cpp/control_gateway_cpp.subsystem.yaml
+
+bindings:
+  control_controller.gateway:
+    to: control_gateway.control
+  control_controller_cpp.gateway:
+    to: control_gateway_cpp.control

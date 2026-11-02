@@ -1,0 +1,80 @@
+version: 1
+id: msg.perception.v1
+kind: message_set
+description: Perception payload family for object detection, pose estimation, and grasp planning outputs.
+imports:
+  msg.core.spatial: v1
+messages:
+  BoundingBox2D:
+    description: Image-plane bounding box for a 2D detection.
+    fields:
+    - name: x
+      type: float32
+    - name: y
+      type: float32
+    - name: width
+      type: float32
+    - name: height
+      type: float32
+  Detection2D:
+    description: Single 2D detection result from a perception subsystem.
+    fields:
+    - name: class_id
+      type: string
+    - name: score
+      type: float32
+    - name: bbox
+      type: BoundingBox2D
+    - name: tracking_id
+      type: string
+      optional: true
+  Detection2DArray:
+    description: Collection of 2D detections for one frame.
+    fields:
+    - name: source_frame_id
+      type: string
+    - name: detections
+      type: vector<Detection2D>
+  ObjectPose:
+    description: Estimated object pose in a named frame.
+    fields:
+    - name: class_id
+      type: string
+    - name: score
+      type: float32
+    - name: frame_id
+      type: string
+    - name: pose
+      type: msg.core.spatial/Pose
+    - name: covariance
+      type: msg.core.spatial/Covariance6x6
+      optional: true
+      description: Optional pose covariance when the perception subsystem can estimate uncertainty.
+    - name: tracking_id
+      type: string
+      optional: true
+  ObjectPoseArray:
+    description: Collection of object-pose estimates for one observation step.
+    fields:
+    - name: objects
+      type: vector<ObjectPose>
+  GraspCandidate:
+    description: Candidate grasp pose estimated from perception output.
+    fields:
+    - name: frame_id
+      type: string
+    - name: grasp_pose
+      type: msg.core.spatial/Pose
+    - name: score
+      type: float32
+    - name: opening_width
+      type: float32
+      optional: true
+    - name: object_id
+      type: string
+      optional: true
+  GraspCandidateArray:
+    description: Ranked grasp candidates for a target object or scene.
+    fields:
+    - name: candidates
+      type: vector<GraspCandidate>

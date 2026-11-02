@@ -1,0 +1,37 @@
+{
+  "description": "register_subscription reply of a subscriber that joins an existing publisher",
+  "message": {
+    "publishers": [
+      {
+        "entry_slot_count": 1,
+        "lock_name": "/r2kernel_7d9c6e0aa191a7de",
+        "publish_slot_count": 2,
+        "publish_slot_index": 0,
+        "publisher": "component.wire_publisher",
+        "queue_depth": 2
+      }
+    ],
+    "res": "ok"
+  },
+  "producer": "control backend udp.rs handle_message REQUEST_SUBSCRIBE -> state/transport_state.rs",
+  "readers": [
+    "python: core/_event_registration.py (request_publish_slots, register_subscription), core/event_client.py _process_notify_message",
+    "cpp: src/core/client_impl_events.hpp, client_control_exchange.hpp json_subscriber_locks/json_publishers, client_impl_runtime_registration.hpp (notify_publisher/notify_subscriber)",
+    "rust bench client: src/control.rs request_publish_slots/register_subscription, src/stamped_stream_runtime.rs PublisherOffer and notify_subscriber"
+  ],
+  "types": {
+    "publishers": "array",
+    "publishers[]": "object",
+    "publishers[].entry_slot_count": "integer",
+    "publishers[].lock_name": "string",
+    "publishers[].publish_slot_count": "integer",
+    "publishers[].publish_slot_index": "integer",
+    "publishers[].publisher": "string",
+    "publishers[].queue_depth": "integer",
+    "res": "string"
+  },
+  "volatile": [
+    "publishers"
+  ],
+  "wire": "{\"publishers\":[{\"entry_slot_count\":1,\"lock_name\":\"/r2kernel_7d9c6e0aa191a7de\",\"publish_slot_count\":2,\"publish_slot_index\":0,\"publisher\":\"component.wire_publisher\",\"queue_depth\":2}],\"res\":\"ok\"}"
+}

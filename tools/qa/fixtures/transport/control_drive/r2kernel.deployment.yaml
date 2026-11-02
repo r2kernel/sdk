@@ -1,0 +1,18 @@
+kind: r2kernel.deployment
+version: 1
+
+subsystems:
+  drive_controller:
+    manifest: ./python/drive_controller.subsystem.yaml
+  drive_gateway:
+    manifest: ./python/drive_gateway.subsystem.yaml
+  drive_controller_cpp:
+    manifest: ./cpp/drive_controller_cpp.subsystem.yaml
+  drive_gateway_cpp:
+    manifest: ./cpp/drive_gateway_cpp.subsystem.yaml
+
+bindings:
+  drive_controller.gateway:
+    to: drive_gateway.control
+  drive_controller_cpp.gateway:
+    to: drive_gateway_cpp.control

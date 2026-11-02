@@ -1,0 +1,19 @@
+version: 1
+id: component.localizer.v1
+kind: component
+name: Robot Localizer
+description: Robot localization component that estimates global body pose from positioning measurements and odometry.
+conformance_apis:
+  - api.localization.v1
+spatial:
+  participation: required
+  ports:
+    map:
+      direction: export
+      semantic: map_reference
+    reference:
+      direction: export
+      semantic: odometry_reference
+    body:
+      direction: export
+      semantic: localized_body

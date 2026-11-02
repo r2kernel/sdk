@@ -1,0 +1,19 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: gateway.device_gateway
+  role: gateway
+
+provides:
+  actuator_servo:
+    contract: api.actuator.servo.v1
+  digital_io:
+    contract: api.tutorial.gateway.device_gateway.digital_io.v1
+    visibility: public
+  timed_digital_output:
+    contract: api.io.digital.timed_output.v1
+  radar_source:
+    contract: api.sensor.radar.source.v1
+  gnss_source:
+    contract: api.sensor.gnss.source.v1

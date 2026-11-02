@@ -1,0 +1,17 @@
+# Mode of the local Control handler socket for R2KERNEL_RUNTIME_IPC_SOCKET_MODE.
+# Read by sdk/python/tests/test_sdk_parity_cases.py and
+# sdk/cpp/tests/control_local_policy_test.cpp. The drivers set
+# R2KERNEL_RUNTIME_IPC_GROUP to a group that does not exist, so no chown runs.
+# env: the variable's value (null: unset). mode: expected octal mode.
+# error: expected substring of the rejection (no mode).
+cases:
+  - {name: unset, env: null, mode: "0660"}
+  - {name: blank, env: "  ", mode: "0660"}
+  - {name: owner_only, env: "0600", mode: "0600"}
+  - {name: surrounding_spaces, env: " 640 ", mode: "0640"}
+  - {name: group_execute, env: "0770", mode: "0770"}
+  - {name: three_digits, env: "660", mode: "0660"}
+  - {name: python_prefix, env: "0o660", error: "R2KERNEL_RUNTIME_IPC_SOCKET_MODE must be an octal file mode: 0o660"}
+  - {name: not_octal, env: "0680", error: "R2KERNEL_RUNTIME_IPC_SOCKET_MODE must be an octal file mode: 0680"}
+  - {name: too_long, env: "17777", error: "R2KERNEL_RUNTIME_IPC_SOCKET_MODE must be an octal file mode: 17777"}
+  - {name: text, env: "rw-rw----", error: "R2KERNEL_RUNTIME_IPC_SOCKET_MODE must be an octal file mode: rw-rw----"}

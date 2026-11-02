@@ -1,0 +1,28 @@
+version: 1
+id: msg.control.v1
+kind: message_set
+description: Versioned public control-cycle metadata for cycle-based Control contracts.
+messages:
+  ControlCycle:
+    description: >-
+      Domain-level cycle identity and intent. Runtime request IDs, transport timestamps,
+      deadlines, and execution reports remain in the runtime envelope.
+    fields:
+    - name: generation
+      type: int64
+      description: >-
+        Explicit binding control generation. A new owner or restarted control session
+        uses a new generation; packets from earlier generations cannot refresh ownership.
+    - name: sequence
+      type: int64
+      description: Strictly increasing cycle sequence within one generation.
+    - name: intent
+      type: string
+      description: >-
+        One of command, keep, or sample. Each API contract declares which intents its
+        refresh mode permits and the payload conditions for each intent.
+    - name: state_revision
+      type: int64
+      description: >-
+        Revision of caller-owned retained command state. It is positive for command
+        and keep intents; sample-exchange APIs without caller-owned state use zero.

@@ -1,0 +1,126 @@
+# Subsystem and deployment manifest discovery of a Subsystem named "probe".
+# Read by sdk/python/tests/test_sdk_parity_cases.py and
+# sdk/cpp/tests/sdk_parity_cases_test.cpp.
+#
+# The drivers create `files` under an empty root (a minimal subsystem manifest
+# for *subsystem.yaml, an empty deployment for the rest), change to `cwd`, set
+# HOME to <root>/home, clear R2KERNEL_SUBSYSTEM_MANIFEST and
+# R2KERNEL_DEPLOYMENT_MANIFEST, apply `env`, and construct the Subsystem with
+# `user_data` and the optional `manifest_path` / `deployment_manifest_path`
+# options (<root> is replaced by the root; user_data is relative to the root,
+# or to cwd when it starts with ./). The Subsystem must use
+# `subsystem_manifest` and `deployment_manifest` (null: none), or fail with a
+# message containing `error`.
+#
+# Order: the manifest_path option, else R2KERNEL_SUBSYSTEM_MANIFEST; then
+# probe.subsystem.yaml and subsystem.yaml two directories above the user data
+# path; then both names in the working directory. Deployment: the
+# deployment_manifest_path option, else R2KERNEL_DEPLOYMENT_MANIFEST; then
+# r2kernel.deployment.yaml next to the subsystem manifest, in its parent
+# directory and in the working directory. A candidate that does not exist is
+# skipped; a leading ~ is expanded.
+cases:
+  - name: option_before_environment
+    files: [custom/explicit.subsystem.yaml, env/probe.subsystem.yaml, pkg/probe.subsystem.yaml]
+    cwd: work
+    user_data: pkg/run/userdata
+    manifest_path: <root>/custom/explicit.subsystem.yaml
+    env: {R2KERNEL_SUBSYSTEM_MANIFEST: <root>/env/probe.subsystem.yaml}
+    subsystem_manifest: custom/explicit.subsystem.yaml
+    deployment_manifest: null
+  - name: environment_without_option
+    files: [env/probe.subsystem.yaml, pkg/probe.subsystem.yaml]
+    cwd: work
+    user_data: pkg/run/userdata
+    env: {R2KERNEL_SUBSYSTEM_MANIFEST: <root>/env/probe.subsystem.yaml}
+    subsystem_manifest: env/probe.subsystem.yaml
+    deployment_manifest: null
+  - name: missing_option_falls_through
+    files: [pkg/probe.subsystem.yaml]
+    cwd: work
+    user_data: pkg/run/userdata
+    manifest_path: <root>/custom/missing.subsystem.yaml
+    subsystem_manifest: pkg/probe.subsystem.yaml
+    deployment_manifest: null
+  - name: named_before_generic
+    files: [pkg/probe.subsystem.yaml, pkg/subsystem.yaml]
+    cwd: work
+    user_data: pkg/run/userdata
+    subsystem_manifest: pkg/probe.subsystem.yaml
+    deployment_manifest: null
+  - name: user_data_root_before_working_directory
+    files: [pkg/subsystem.yaml, work/probe.subsystem.yaml]
+    cwd: work
+    user_data: pkg/run/userdata
+    subsystem_manifest: pkg/subsystem.yaml
+    deployment_manifest: null
+  - name: working_directory_named
+    files: [work/probe.subsystem.yaml, work/subsystem.yaml]
+    cwd: work
+    user_data: pkg/run/userdata
+    subsystem_manifest: work/probe.subsystem.yaml
+    deployment_manifest: null
+  - name: working_directory_generic
+    files: [work/subsystem.yaml]
+    cwd: work
+    user_data: pkg/run/userdata
+    subsystem_manifest: work/subsystem.yaml
+    deployment_manifest: null
+  - name: relative_user_data_path
+    files: [work/probe.subsystem.yaml, probe.subsystem.yaml]
+    cwd: work/run
+    user_data: ./userdata
+    subsystem_manifest: work/probe.subsystem.yaml
+    deployment_manifest: null
+  - name: home_directory_option
+    files: [home/probe.subsystem.yaml, pkg/probe.subsystem.yaml]
+    cwd: work
+    user_data: pkg/run/userdata
+    manifest_path: "~/probe.subsystem.yaml"
+    subsystem_manifest: home/probe.subsystem.yaml
+    deployment_manifest: null
+  - name: no_subsystem_manifest
+    files: []
+    cwd: work
+    user_data: pkg/run/userdata
+    error: "Subsystem manifest is required for probe"
+  - name: deployment_next_to_subsystem_manifest
+    files: [pkg/probe.subsystem.yaml, pkg/r2kernel.deployment.yaml, r2kernel.deployment.yaml, work/r2kernel.deployment.yaml]
+    cwd: work
+    user_data: pkg/run/userdata
+    subsystem_manifest: pkg/probe.subsystem.yaml
+    deployment_manifest: pkg/r2kernel.deployment.yaml
+  - name: deployment_in_manifest_parent
+    files: [pkg/probe.subsystem.yaml, r2kernel.deployment.yaml, work/r2kernel.deployment.yaml]
+    cwd: work
+    user_data: pkg/run/userdata
+    subsystem_manifest: pkg/probe.subsystem.yaml
+    deployment_manifest: r2kernel.deployment.yaml
+  - name: deployment_in_working_directory
+    files: [area/pkg/probe.subsystem.yaml, work/r2kernel.deployment.yaml]
+    cwd: work
+    user_data: area/pkg/run/userdata
+    subsystem_manifest: area/pkg/probe.subsystem.yaml
+    deployment_manifest: work/r2kernel.deployment.yaml
+  - name: deployment_option_before_environment
+    files: [pkg/probe.subsystem.yaml, custom/option.deployment.yaml, custom/env.deployment.yaml, pkg/r2kernel.deployment.yaml]
+    cwd: work
+    user_data: pkg/run/userdata
+    deployment_manifest_path: <root>/custom/option.deployment.yaml
+    env: {R2KERNEL_DEPLOYMENT_MANIFEST: <root>/custom/env.deployment.yaml}
+    subsystem_manifest: pkg/probe.subsystem.yaml
+    deployment_manifest: custom/option.deployment.yaml
+  - name: deployment_environment_before_discovery
+    files: [pkg/probe.subsystem.yaml, custom/env.deployment.yaml, pkg/r2kernel.deployment.yaml]
+    cwd: work
+    user_data: pkg/run/userdata
+    env: {R2KERNEL_DEPLOYMENT_MANIFEST: <root>/custom/env.deployment.yaml}
+    subsystem_manifest: pkg/probe.subsystem.yaml
+    deployment_manifest: custom/env.deployment.yaml
+  - name: deployment_home_directory_option
+    files: [pkg/probe.subsystem.yaml, home/probe.deployment.yaml]
+    cwd: work
+    user_data: pkg/run/userdata
+    deployment_manifest_path: "~/probe.deployment.yaml"
+    subsystem_manifest: pkg/probe.subsystem.yaml
+    deployment_manifest: home/probe.deployment.yaml

@@ -1,0 +1,12 @@
+kind: r2kernel.subsystem
+version: 1
+subsystem:
+  name: fixture.operation_caller
+  role: component
+requires:
+  work:
+    contract: fixture.operation.private.v1
+    visibility: internal
+    required: false
+    endpoints:
+      operations: [work]

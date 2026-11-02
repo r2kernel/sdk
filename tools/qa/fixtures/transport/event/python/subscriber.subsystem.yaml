@@ -1,0 +1,16 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: subscriber
+  role: component
+
+requires:
+  event_stream:
+    contract: tutorial.transport.event_stream.v1
+    visibility: internal
+    cardinality: one
+    required: false
+    endpoints:
+      publishes:
+        - x

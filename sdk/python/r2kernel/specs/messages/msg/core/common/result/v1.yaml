@@ -1,0 +1,15 @@
+version: 1
+id: msg.core.common.result.v1
+kind: message_set
+description: Generic terminal result payload for procedures and operations.
+messages:
+  Result:
+    description: Terminal result of a procedure or operation.
+    fields:
+      - name: success
+        type: bool
+      - name: status
+        type: string
+      - name: detail
+        type: bytes
+        optional: true

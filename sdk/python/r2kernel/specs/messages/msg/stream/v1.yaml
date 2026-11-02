@@ -1,0 +1,115 @@
+version: 1
+id: msg.stream.v1
+kind: message_set
+description: Shared stream identity, codec profile, bounded payload chunk, and transfer-part metadata.
+messages:
+  StreamIdentity:
+    description: >-
+      Provider-issued stream session and configuration revisions. This identity is
+      domain data, not an authorization credential or a runtime route generation.
+    fields:
+    - name: session_id
+      type: string
+      description: Opaque provider-issued session identifier, unique across provider restarts.
+    - name: configuration_revision
+      type: int64
+      description: Active stream configuration revision.
+    - name: format_revision
+      type: int64
+      description: Active data-format and decoder-configuration revision.
+  CodecDescriptor:
+    description: >-
+      Stable codec contract identity and all information required to parse and decode
+      its bitstream. A codec library or product name alone is not a codec contract.
+    fields:
+    - name: codec_id
+      type: string
+      description: Authority-qualified codec profile identifier.
+    - name: codec_version
+      type: string
+      description: Version of the bitstream and configuration contract.
+    - name: profile
+      type: string
+      description: Codec profile, level, bit depth, and other required profile selection.
+    - name: bitstream_framing
+      type: string
+      description: Declared encoded-unit framing and byte-stream boundaries.
+    - name: configuration_format
+      type: string
+      description: Declared syntax and version of decoder configuration bytes.
+    - name: configuration_bytes
+      type: bytes
+      optional: true
+      description: Bounded decoder configuration needed for this format revision.
+    - name: decoded_layout
+      type: string
+      description: Declared decoded sample layout and interpretation.
+  StreamLimits:
+    description: >-
+      Finite encoded, decoded, configuration, chunk, queue, and reassembly limits for
+      one selected stream profile. Receivers validate these values before allocation.
+    fields:
+    - name: max_codec_config_bytes
+      type: uint32
+    - name: max_encoded_unit_bytes
+      type: int64
+    - name: max_decoded_unit_bytes
+      type: int64
+    - name: max_chunk_bytes
+      type: uint32
+    - name: max_parts_per_unit
+      type: uint32
+      description: Maximum part count; bounds per-part assembly metadata.
+    - name: max_pending_units
+      type: uint32
+    - name: max_pending_bytes
+      type: int64
+    - name: max_reassembly_age_ns
+      type: int64
+  EncodedChunk:
+    description: >-
+      One bounded byte range from a logical encoded or raw payload unit. Chunks do not
+      change the sample identity, sample lifetime, codec unit, or dependency order.
+    fields:
+    - name: part_index
+      type: uint32
+      description: Zero-based part index within one transfer unit.
+    - name: part_count
+      type: uint32
+      description: Fixed total number of parts declared for the transfer unit.
+    - name: total_payload_bytes
+      type: int64
+      description: Total payload size, bounded by the selected profile before allocation.
+    - name: offset_bytes
+      type: int64
+      description: Byte offset within the complete payload.
+    - name: payload_bytes
+      type: bytes
+      description: This part's bytes, bounded by max_chunk_bytes.
+  TransferPartHeader:
+    description: >-
+      Stable identity and lifetime for a typed data sample split over one or more
+      Control cycles. acquired_at_sync_ns and expires_at_sync_ns describe the original
+      sample lifetime; retries and later cycles never rewrite or extend them.
+    fields:
+    - name: stream
+      type: StreamIdentity
+    - name: sample_id
+      type: int64
+      description: Logical sensor or media sample identity, distinct from cycle sequence.
+    - name: unit_sequence
+      type: int64
+      description: Codec delivery-unit sequence, distinct from sample_id and format revision.
+    - name: acquired_at_sync_ns
+      type: int64
+      description: Original synchronized acquisition time for this domain sample.
+    - name: expires_at_sync_ns
+      type: int64
+      description: Absolute synchronized expiry of the original sample data.
+    - name: independent
+      type: bool
+      description: Whether this unit can be decoded without referenced stream units.
+    - name: reference_unit_sequences
+      type: vector<int64>
+      optional: true
+      description: Explicit codec-unit dependencies; not assumed to mean the prior unit only.

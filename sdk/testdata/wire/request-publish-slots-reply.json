@@ -1,0 +1,45 @@
+{
+  "description": "request_publish_slots reply: the publisher's slot geometry and one lock per subscriber",
+  "message": {
+    "entry_slot_count": 1,
+    "event_startup_barrier_ms": 0,
+    "publish_slot_count": 2,
+    "publish_slot_index": 0,
+    "queue_depth": 2,
+    "res": "ok",
+    "subscribers": [
+      {
+        "internal": true,
+        "lock_name": "/r2kernel_548b94ea2e184706",
+        "subscriber": "__ws_event_bridge__"
+      },
+      {
+        "lock_name": "/r2kernel_5c41aeb89ea4dd60",
+        "subscriber": "component.wire_early"
+      }
+    ]
+  },
+  "producer": "control backend udp.rs handle_message REQUEST_PUBLISH_SLOTS -> state/transport_state.rs",
+  "readers": [
+    "python: core/_event_registration.py (request_publish_slots, register_subscription), core/event_client.py _process_notify_message",
+    "cpp: src/core/client_impl_events.hpp, client_control_exchange.hpp json_subscriber_locks/json_publishers, client_impl_runtime_registration.hpp (notify_publisher/notify_subscriber)",
+    "rust bench client: src/control.rs request_publish_slots/register_subscription, src/stamped_stream_runtime.rs PublisherOffer and notify_subscriber"
+  ],
+  "types": {
+    "entry_slot_count": "integer",
+    "event_startup_barrier_ms": "integer",
+    "publish_slot_count": "integer",
+    "publish_slot_index": "integer",
+    "queue_depth": "integer",
+    "res": "string",
+    "subscribers": "array",
+    "subscribers[]": "object",
+    "subscribers[].internal": "boolean",
+    "subscribers[].lock_name": "string",
+    "subscribers[].subscriber": "string"
+  },
+  "volatile": [
+    "subscribers"
+  ],
+  "wire": "{\"entry_slot_count\":1,\"event_startup_barrier_ms\":0,\"publish_slot_count\":2,\"publish_slot_index\":0,\"queue_depth\":2,\"res\":\"ok\",\"subscribers\":[{\"internal\":true,\"lock_name\":\"/r2kernel_548b94ea2e184706\",\"subscriber\":\"__ws_event_bridge__\"},{\"lock_name\":\"/r2kernel_5c41aeb89ea4dd60\",\"subscriber\":\"component.wire_early\"}]}"
+}

@@ -1,0 +1,160 @@
+version: 1
+id: msg.sensor.gnss.v1
+kind: message_set
+description: Receiver-reported GNSS fix samples and source Control messages.
+imports:
+  msg.control: v1
+messages:
+  GnssCycleRequest:
+    description: >-
+      Requests the latest prepared GNSS fix using a sample-exchange cycle. Omit
+      expected_session_id only to discover the source session. after_sample_id
+      is a nonnegative cursor and must be zero or omitted while bootstrapping.
+      The source may return its latest fix and skip intermediate sample IDs.
+    fields:
+    - name: cycle
+      type: msg.control/ControlCycle
+    - name: expected_session_id
+      type: string
+      optional: true
+      description: Source process identity last adopted by the client.
+    - name: after_sample_id
+      type: int64
+      optional: true
+      description: >-
+        Last consumed sample ID in expected_session_id. Intermediate IDs may be
+        skipped because this source retains only the latest fix.
+  GnssCycleResponse:
+    description: >-
+      Reports the current source session on every response. A changed session
+      returns resync_required without a fix; the client adopts session_id and
+      restarts its cursor. sample_available contains a receiver sample, including
+      a normal no-fix state. no_new_sample means no new receiver sample exists.
+    fields:
+    - name: cycle
+      type: msg.control/ControlCycle
+    - name: session_id
+      type: string
+      description: Unique process/reset identity for this GNSS source.
+    - name: status
+      type: string
+      description: sample_available, no_new_sample, resync_required, or device_error.
+    - name: fix
+      type: GnssFix
+      optional: true
+    - name: detail
+      type: string
+      optional: true
+      description: Optional provider detail for a domain status.
+  GnssFix:
+    description: >-
+      One receiver-reported antenna position sample. No robot pose, yaw, truth
+      identity, or localization result is implied. A no_fix mode is a valid new
+      receiver sample, distinct from a response with no new sample. Position
+      coordinates are WGS84 geodetic latitude and longitude. Acquisition time
+      is expressed in r2kernel_sync only when the source has a known clock mapping.
+      Any runtime transport receipt metadata remains separate from acquisition
+      time; this Control response does not define a receipt timestamp field.
+    fields:
+    - name: session_id
+      type: string
+      description: Must match the enclosing GnssCycleResponse.session_id.
+    - name: sample_id
+      type: int64
+      description: >-
+        Positive immutable identity for this receiver sample, strictly increasing
+        within session_id. It may jump when latest-only polling skips samples.
+    - name: frame_id
+      type: string
+      description: Receiver antenna frame in which the antenna origin is located.
+    - name: fix_mode
+      type: string
+      description: >-
+        unknown, no_fix, fix_2d, or fix_3d. A 2D or 3D fix requires latitude and
+        longitude. unknown and no_fix carry no position fields and require
+        correction_status=unknown.
+    - name: correction_status
+      type: string
+      description: >-
+        Receiver-reported solution class: unknown, autonomous, differential,
+        rtk_float, or rtk_fixed. It must be unknown without a valid solution;
+        do not infer a class from correction input alone.
+    - name: observation_time_status
+      type: string
+      description: known_sync_time or unknown for the receiver measurement acquisition time.
+    - name: observed_at_sync_ns
+      type: int64
+      optional: true
+      description: >-
+        Nonnegative acquisition time only when a verified source clock mapping
+        translates the receiver time scale to r2kernel_sync. Omit when unknown;
+        never substitute the gateway receive time.
+    - name: latitude_deg
+      type: float64
+      optional: true
+      description: WGS84 geodetic latitude in degrees, in [-90, 90], only for a valid fix.
+    - name: longitude_deg
+      type: float64
+      optional: true
+      description: WGS84 geodetic longitude in degrees, in [-180, 180], only for a valid fix.
+    - name: altitude_m
+      type: float64
+      optional: true
+      description: >-
+        Optional receiver-provided altitude in [-10000000, 10000000] meters.
+        Allowed only with fix_3d; its reference is required when present.
+    - name: altitude_reference
+      type: string
+      optional: true
+      description: >-
+        wgs84_ellipsoid or mean_sea_level; required exactly when altitude_m is
+        present and allowed only with fix_3d.
+    - name: position_covariance_m2
+      type: vector<float64>
+      optional: true
+      description: >-
+        Optional 3x3 row-major positive-semidefinite covariance in the local ENU
+        tangent frame, in square meters. Exactly nine finite values, each in
+        [-1e12, 1e12]; allowed only with fix_3d. Two-dimensional uncertainty
+        should use horizontal accuracy rather than inventing a vertical component.
+    - name: horizontal_accuracy_m
+      type: float64
+      optional: true
+      description: Positive receiver-reported horizontal error estimate up to 1e6 meters.
+    - name: vertical_accuracy_m
+      type: float64
+      optional: true
+      description: >-
+        Positive receiver-reported vertical error estimate up to 1e6 meters;
+        requires altitude_m and therefore a 3D fix.
+    - name: accuracy_confidence
+      type: string
+      optional: true
+      description: >-
+        unknown, one_sigma, or 95_percent. Required when either accuracy estimate
+        is present; unknown preserves an undocumented device confidence basis.
+    - name: hdop
+      type: float64
+      optional: true
+      description: >-
+        Receiver-reported horizontal dilution of precision in (0, 1000]; not a
+        meter-valued accuracy.
+    - name: vdop
+      type: float64
+      optional: true
+      description: >-
+        Receiver-reported vertical dilution of precision in (0, 1000]; not a
+        meter-valued accuracy.
+    - name: pdop
+      type: float64
+      optional: true
+      description: >-
+        Receiver-reported position dilution of precision in (0, 1000]; not a
+        meter-valued accuracy.
+    - name: velocity_enu_mps
+      type: vector<float64>
+      optional: true
+      description: >-
+        Optional receiver-reported east, north, up velocity in meters per second;
+        exactly three finite values with speed at most 10000 m/s, present only
+        with a valid 2D or 3D fix.

@@ -1,0 +1,147 @@
+version: 1
+id: msg.visual.v1
+kind: message_set
+description: Typed visual sample formats and transfer parts for camera sources and display sinks.
+imports:
+  msg.control: v1
+  msg.stream: v1
+messages:
+  VisualPlaneFormat:
+    description: One plane's decoded raster geometry and byte layout.
+    fields:
+    - name: plane_index
+      type: uint32
+    - name: width
+      type: uint32
+    - name: height
+      type: uint32
+    - name: offset_bytes
+      type: int64
+    - name: row_stride_bytes
+      type: uint32
+    - name: bytes_per_sample
+      type: uint8
+    - name: horizontal_subsampling
+      type: uint8
+    - name: vertical_subsampling
+      type: uint8
+    - name: sample_format
+      type: string
+      description: Numeric or packed sample representation for this plane.
+    - name: endianness
+      type: string
+      description: little or big byte order for multibyte decoded samples; required for every plane.
+  VisualStreamFormat:
+    description: >-
+      Immutable format descriptor for one stream format revision. representation is
+      raw_raster, encoded_image, or video_access_unit. Conditional field requirements
+      are defined by the public stream contract documentation.
+    fields:
+    - name: representation
+      type: string
+    - name: width
+      type: uint32
+    - name: height
+      type: uint32
+    - name: pixel_format
+      type: string
+    - name: color_space
+      type: string
+    - name: color_range
+      type: string
+    - name: bit_depth
+      type: uint8
+    - name: planes
+      type: vector<VisualPlaneFormat>
+    - name: codec
+      type: msg.stream/CodecDescriptor
+      optional: true
+    - name: limits
+      type: msg.stream/StreamLimits
+    - name: update_model
+      type: string
+      description: static_image or live_samples.
+  VisualSample:
+    description: Complete reassembled visual sample, not an individual transport part.
+    fields:
+    - name: header
+      type: msg.stream/TransferPartHeader
+    - name: format
+      type: VisualStreamFormat
+    - name: presentation_timestamp_ns
+      type: int64
+      optional: true
+      description: Media timeline presentation time, not a Control execution timestamp.
+    - name: decode_timestamp_ns
+      type: int64
+      optional: true
+      description: Media timeline decode order time when required by the codec profile.
+    - name: payload_bytes
+      type: bytes
+  VisualTransferPart:
+    description: >-
+      Typed visual sample header and one bounded payload chunk. Include format on the
+      first part of a session and whenever format_revision changes; do not renegotiate
+      by sending a DESCRIBE/CONFIGURE handshake on every stream.
+    fields:
+    - name: header
+      type: msg.stream/TransferPartHeader
+    - name: chunk
+      type: msg.stream/EncodedChunk
+    - name: format
+      type: VisualStreamFormat
+      optional: true
+    - name: presentation_timestamp_ns
+      type: int64
+      optional: true
+    - name: decode_timestamp_ns
+      type: int64
+      optional: true
+  DisplayControlRequest:
+    description: >-
+      Control-only display request. A command submits a part or clears/resets output;
+      keep continues the currently selected state without retransmitting old bytes.
+    fields:
+    - name: cycle
+      type: msg.control/ControlCycle
+    - name: action
+      type: string
+      description: submit_part, clear_output, reset_stream, or continue_output.
+    - name: part
+      type: VisualTransferPart
+      optional: true
+    - name: presentation_timestamp_ns
+      type: int64
+      optional: true
+      description: >-
+        Requested presentation time on the declared media timeline. It is separate
+        from execute_at_sync_ns and requires a declared clock mapping.
+  DisplayControlResponse:
+    description: >-
+      Typed display domain progress for the request cycle. This status reports the
+      actual observed processing stage and does not redefine runtime execution status.
+    fields:
+    - name: cycle
+      type: msg.control/ControlCycle
+    - name: status
+      type: string
+      description: >-
+        part_received, unit_complete, decoded, submitted_to_renderer, presented,
+        buffer_full, resync_required, stale_sample, unsupported_format, or device_error.
+    - name: accepted_part_index
+      type: uint32
+      optional: true
+    - name: received_payload_bytes
+      type: int64
+      optional: true
+    - name: queued_units
+      type: uint32
+    - name: queued_bytes
+      type: int64
+    - name: available_units
+      type: uint32
+    - name: available_bytes
+      type: int64
+    - name: detail
+      type: string
+      optional: true

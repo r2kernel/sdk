@@ -1,0 +1,36 @@
+version: 1
+id: msg.io.digital.timed_output.v1
+kind: message_set
+description: Periodic digital output Control request and typed response.
+imports:
+  msg.control: v1
+  msg.core.common.primitive: v1
+messages:
+  TimedOutputControlRequest:
+    description: >-
+      A command establishes or replaces the output state. A keep cycle carries no
+      output payload and explicitly maintains the same positive state_revision.
+    fields:
+    - name: cycle
+      type: msg.control/ControlCycle
+    - name: output
+      type: msg.core.common.primitive/IndexedBoolValue
+      optional: true
+  TimedOutputControlResponse:
+    description: >-
+      Typed output-domain result. observed_value is present only when provider hardware
+      supplies an actual readback; command application is not physical readback.
+    fields:
+    - name: cycle
+      type: msg.control/ControlCycle
+    - name: status
+      type: string
+      description: applied, rejected, or device_error.
+    - name: channel_index
+      type: uint32
+    - name: observed_value
+      type: bool
+      optional: true
+    - name: detail
+      type: string
+      optional: true

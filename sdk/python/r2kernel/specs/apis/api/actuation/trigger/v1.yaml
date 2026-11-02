@@ -1,0 +1,42 @@
+version: 1
+id: api.actuation.trigger.v1
+kind: api_contract
+name: Trigger Actuation API Contract
+description: Canonical bounded one-shot actuation with provider-owned channel mapping, timing, and safe-state handling.
+procedures:
+- name: trigger
+  request: msg.core.common.primitive.v1/Empty
+  response: msg.core.common.primitive.v1/BoolValue
+  timing_support: none
+  semantics:
+    idempotency: non_idempotent
+    side_effects: provider_configured_bounded_actuation
+frames:
+  policy: endpoint_declared
+  dynamic_frames: owning_message_only
+timing:
+  clock_domain: r2kernel_sync
+  event_envelope:
+    observed: observed_at_sync_ns
+    published: published_at_sync_ns
+    received: received_at_sync_ns
+  control_envelope:
+    generated: generated_at_sync_ns
+    sent: sent_at_sync_ns
+    execute: execute_at_sync_ns
+    valid_until: valid_until_sync_ns
+state_model:
+  owner: provider
+  lifecycle: runtime_managed
+failure_semantics:
+  transport: runtime_status
+  domain: endpoint_response
+authority:
+  owner: provider
+  command_arbitration: exclusive_required_binding
+limits:
+  source: provider
+  enforcement: provider
+conformance:
+  level: public
+  payload_time: runtime_envelope

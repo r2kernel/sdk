@@ -1,0 +1,20 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: component.navigation
+  role: component
+
+requires:
+  localization:
+    contract: component.localizer.v1
+    cardinality: one
+    required: true
+  mobility:
+    contract: component.mobile_base.odometry.v1
+    cardinality: one
+    required: true
+
+provides:
+  navigation:
+    contract: component.navigation.v1

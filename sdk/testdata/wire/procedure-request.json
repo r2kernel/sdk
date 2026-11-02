@@ -1,0 +1,40 @@
+{
+  "description": "procedure.call request proxied by Control; params reuses the request's member names",
+  "message": {
+    "kind": "procedure_request",
+    "params": {
+      "operation": "other",
+      "procedure": "other",
+      "request_id": "inner",
+      "target": "inner.target",
+      "timeout_ms": 5,
+      "value": 7
+    },
+    "procedure": "echo",
+    "request_id": "req-1",
+    "target": "component.wire_fixture",
+    "timeout_ms": 250
+  },
+  "producer": "control backend state/control_requests.rs procedure_request_payload (ws_procedure_call)",
+  "readers": [
+    "python: core/_runtime_dispatch.py _handle_procedure_request / _handle_operation_start_request",
+    "cpp: src/wrapper/subsystem_dispatch.hpp handle_procedure_request, subsystem_operation_dispatch.hpp",
+    "rust bench client: src/procedure.rs parse_procedure_request, src/operation.rs parse_operation_start_request"
+  ],
+  "types": {
+    "kind": "string",
+    "params": "object",
+    "params.operation": "string",
+    "params.procedure": "string",
+    "params.request_id": "string",
+    "params.target": "string",
+    "params.timeout_ms": "integer",
+    "params.value": "integer",
+    "procedure": "string",
+    "request_id": "string",
+    "target": "string",
+    "timeout_ms": "integer"
+  },
+  "volatile": [],
+  "wire": "{\"kind\":\"procedure_request\",\"params\":{\"operation\":\"other\",\"procedure\":\"other\",\"request_id\":\"inner\",\"target\":\"inner.target\",\"timeout_ms\":5,\"value\":7},\"procedure\":\"echo\",\"request_id\":\"req-1\",\"target\":\"component.wire_fixture\",\"timeout_ms\":250}"
+}

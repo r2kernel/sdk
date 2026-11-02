@@ -1,0 +1,16 @@
+version: 1
+id: component.gripper.v1
+kind: component
+name: Gripper Controller
+description: Binary gripper controller for open, close, and state reporting.
+conformance_apis:
+  - api.end_effector.gripper.v1
+spatial:
+  participation: required
+  ports:
+    base:
+      direction: import
+      semantic: end_effector_mount
+    grasp:
+      direction: export
+      semantic: grasp_frame

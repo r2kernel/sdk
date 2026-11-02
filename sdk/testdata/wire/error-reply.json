@@ -1,0 +1,19 @@
+{
+  "description": "a refused request: {status: error, error}; no res/ok members",
+  "message": {
+    "error": "unknown subsystem: component.unknown",
+    "status": "error"
+  },
+  "producer": "control backend udp.rs response_to_effect",
+  "readers": [
+    "python: every reader checks res == \"ok\" (core/r2kernel_client.py, core/_event_registration.py)",
+    "cpp: json_string_field(reply, \"res\") / yaml res",
+    "rust bench client: src/control.rs (status == \"error\" or res != \"ok\")"
+  ],
+  "types": {
+    "error": "string",
+    "status": "string"
+  },
+  "volatile": [],
+  "wire": "{\"error\":\"unknown subsystem: component.unknown\",\"status\":\"error\"}"
+}

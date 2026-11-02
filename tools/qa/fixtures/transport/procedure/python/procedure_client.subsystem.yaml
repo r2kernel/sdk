@@ -1,0 +1,13 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: procedure_client
+  role: component
+
+requires:
+  procedure:
+    contract: tutorial.transport.procedure.v1
+    visibility: internal
+    cardinality: one
+    required: true

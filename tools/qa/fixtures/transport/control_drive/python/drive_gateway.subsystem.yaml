@@ -1,0 +1,11 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: drive_gateway
+  role: gateway
+
+provides:
+  control:
+    contract: api.actuator.drive.v1
+    visibility: public

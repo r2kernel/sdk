@@ -1,0 +1,63 @@
+version: 1
+id: api.motion.manipulator.cartesian.v1
+kind: api_contract
+name: Manipulator Cartesian API Contract
+description: Canonical manipulator Cartesian programmed-motion API contract.
+operations:
+- name: move_l
+  request: msg.motion.manipulator.v1/MoveLRequest
+  feedback: msg.motion.manipulator.v1/MotionFeedback
+  result: msg.motion.manipulator.v1/MotionResult
+  state: msg.motion.manipulator.v1/MotionState
+  timing_support: none
+  semantics:
+    progress: feedback_stream
+    cancellation: required
+    terminal_states:
+    - succeeded
+    - failed
+    - canceled
+    - rejected
+- name: move_c
+  request: msg.motion.manipulator.v1/MoveCRequest
+  feedback: msg.motion.manipulator.v1/MotionFeedback
+  result: msg.motion.manipulator.v1/MotionResult
+  state: msg.motion.manipulator.v1/MotionState
+  timing_support: none
+  semantics:
+    progress: feedback_stream
+    cancellation: required
+    terminal_states:
+    - succeeded
+    - failed
+    - canceled
+    - rejected
+frames:
+  policy: endpoint_declared
+  dynamic_frames: owning_message_only
+timing:
+  clock_domain: r2kernel_sync
+  event_envelope:
+    observed: observed_at_sync_ns
+    published: published_at_sync_ns
+    received: received_at_sync_ns
+  control_envelope:
+    generated: generated_at_sync_ns
+    sent: sent_at_sync_ns
+    execute: execute_at_sync_ns
+    valid_until: valid_until_sync_ns
+state_model:
+  owner: provider
+  lifecycle: runtime_managed
+failure_semantics:
+  transport: runtime_status
+  domain: endpoint_response
+authority:
+  owner: provider
+  command_arbitration: exclusive_required_binding
+limits:
+  source: provider
+  enforcement: provider
+conformance:
+  level: public
+  payload_time: runtime_envelope

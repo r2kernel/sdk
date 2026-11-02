@@ -1,0 +1,14 @@
+version: 1
+id: msg.core.linalg.v1
+kind: message_set
+description: Dense linear algebra containers used by controller and kinematics API contracts.
+messages:
+  DenseMatrix:
+    description: Row-major dense matrix with double-precision values.
+    fields:
+      - name: rows
+        type: uint32
+      - name: cols
+        type: uint32
+      - name: values
+        type: vector<float64>

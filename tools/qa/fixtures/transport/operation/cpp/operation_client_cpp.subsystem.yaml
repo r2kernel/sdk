@@ -1,0 +1,13 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: operation_client_cpp
+  role: component
+
+requires:
+  operation:
+    contract: tutorial.transport.operation.v1
+    visibility: internal
+    cardinality: one
+    required: true

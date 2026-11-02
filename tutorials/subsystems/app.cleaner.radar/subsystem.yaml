@@ -1,0 +1,45 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: app.cleaner.radar
+  role: app
+
+application:
+  requires_robot:
+    profiles:
+      - tutorial.robot_cleaner.cleaner_2d.v1
+
+requires:
+  navigation:
+    contract: api.navigation.v1
+    cardinality: one
+    required: true
+  manipulation:
+    contract: api.motion.articulated.trajectory.v1
+    cardinality: one
+    required: true
+  gripper:
+    contract: api.end_effector.gripper.v1
+    cardinality: one
+    required: true
+  trash_disposal:
+    contract: api.actuation.trigger.v1
+    cardinality: one
+    required: true
+  perception:
+    contract: api.perception.query.v1
+    cardinality: one
+    required: true
+
+provides:
+  app_status:
+    contract: tutorial.robot_cleaner.app_status.v1
+    visibility: internal
+    endpoints:
+      publishes:
+        - robot_cleaner/app/status
+      procedures:
+        - status
+        - start
+        - stop

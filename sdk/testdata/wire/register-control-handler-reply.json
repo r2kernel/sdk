@@ -1,0 +1,46 @@
+{
+  "description": "register_control_handler reply: the handler's Control port and the local Control transport settings",
+  "message": {
+    "control_local_endpoint": "/tmp/r2kernel-control-local-auto-44889.sock",
+    "control_local_payload_policy": "forwarded_shm_v5",
+    "control_local_protocol": "binary_shm_v5",
+    "control_port": 41001,
+    "control_relay_enabled": false,
+    "control_shared_buffer_pool_name": "r2kernel_control_local",
+    "control_shared_buffer_slot_size": 16777216,
+    "control_shm_max_channels": 128,
+    "control_shm_max_mapped_bytes": 67108864,
+    "control_shm_max_owned_bytes": 67108864,
+    "control_shm_min_region_bytes": 4096,
+    "manager_peer_auth_required": false,
+    "res": "ok",
+    "resource_service_socket": null
+  },
+  "producer": "control backend udp.rs handle_message REGISTER_CONTROL_HANDLER -> state/control_requests.rs register_control_handler",
+  "readers": [
+    "python: core/native_control.py (configure_from_control_registration, control_port)",
+    "cpp: src/core/client_impl_local_sockets.hpp",
+    "rust bench client: src/control.rs register_control_handler"
+  ],
+  "types": {
+    "control_local_endpoint": "string",
+    "control_local_payload_policy": "string",
+    "control_local_protocol": "string",
+    "control_port": "integer",
+    "control_relay_enabled": "boolean",
+    "control_shared_buffer_pool_name": "string",
+    "control_shared_buffer_slot_size": "integer",
+    "control_shm_max_channels": "integer",
+    "control_shm_max_mapped_bytes": "integer",
+    "control_shm_max_owned_bytes": "integer",
+    "control_shm_min_region_bytes": "integer",
+    "manager_peer_auth_required": "boolean",
+    "res": "string",
+    "resource_service_socket": "null"
+  },
+  "volatile": [
+    "control_local_endpoint",
+    "control_port"
+  ],
+  "wire": "{\"control_local_endpoint\":\"/tmp/r2kernel-control-local-auto-44889.sock\",\"control_local_payload_policy\":\"forwarded_shm_v5\",\"control_local_protocol\":\"binary_shm_v5\",\"control_port\":41001,\"control_relay_enabled\":false,\"control_shared_buffer_pool_name\":\"r2kernel_control_local\",\"control_shared_buffer_slot_size\":16777216,\"control_shm_max_channels\":128,\"control_shm_max_mapped_bytes\":67108864,\"control_shm_max_owned_bytes\":67108864,\"control_shm_min_region_bytes\":4096,\"manager_peer_auth_required\":false,\"res\":\"ok\",\"resource_service_socket\":null}"
+}

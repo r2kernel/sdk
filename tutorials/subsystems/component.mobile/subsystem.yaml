@@ -1,0 +1,28 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: component.mobile
+  role: component
+
+spatial:
+  participation: required
+  ports:
+    reference:
+      direction: export
+      semantic: odometry_reference
+      frame: odom
+    body:
+      direction: export
+      semantic: mobile_body
+      frame: cleaner_base
+
+requires:
+  actuator_servo:
+    contract: api.actuator.servo.v1
+    cardinality: one
+    required: true
+
+provides:
+  mobile_base:
+    contract: component.mobile_base.odometry.v1

@@ -1,0 +1,37 @@
+schema_version: 1
+name: tutorial.robot_cleaner.gripper
+description: Robot cleaner gripper component subsystem package.
+contracts:
+  spec_roots:
+    - spec
+entrypoint:
+  command: run.py
+  args:
+    - --name
+    - "{{params.subsystem.name}}"
+    - --manifest
+    - subsystem.yaml
+    - --deployment-manifest
+    - "{{params.deployment.manifest}}"
+    - --binding
+    - "{{params.binding.digital_io}}"
+    - --log-level
+    - "{{params.log.level}}"
+parameters:
+  subsystem.name:
+    type: string
+    default: "{{instance.id}}"
+  deployment.manifest:
+    type: string
+    default: ""
+  binding.digital_io:
+    type: string
+    default: digital_io
+  log.level:
+    type: string
+    default: INFO
+resources:
+  network:
+    interfaces: []
+  devices:
+    paths: []

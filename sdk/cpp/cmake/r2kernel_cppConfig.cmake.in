@@ -1,0 +1,18 @@
+@PACKAGE_INIT@
+
+set(r2kernel_cpp_VERSION "@PROJECT_VERSION@")
+set(R2KERNEL_CPP_RELEASE_VERSION "@R2KERNEL_CPP_RELEASE_VERSION@")
+
+if(NOT TARGET r2kernel::core)
+    if(WIN32)
+        add_library(r2kernel::core UNKNOWN IMPORTED)
+    else()
+        add_library(r2kernel::core SHARED IMPORTED)
+    endif()
+    set_target_properties(r2kernel::core PROPERTIES IMPORTED_LOCATION "@R2KERNEL_CPP_CORE_LIBRARY@")
+    if(UNIX AND NOT APPLE)
+        set_target_properties(r2kernel::core PROPERTIES IMPORTED_NO_SONAME TRUE)
+    endif()
+endif()
+
+include("${CMAKE_CURRENT_LIST_DIR}/r2kernel_cppTargets.cmake")

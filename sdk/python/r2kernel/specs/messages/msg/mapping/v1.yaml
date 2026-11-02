@@ -1,0 +1,31 @@
+version: 1
+id: msg.mapping.v1
+kind: message_set
+description: Mapping payload family for occupancy-style map publication.
+imports:
+  msg.core.spatial: v1
+messages:
+  OccupancyGridMap:
+    description: Occupancy-grid style map payload for mapping publication.
+    fields:
+      - name: map_id
+        type: string
+      - name: frame_id
+        type: string
+      - name: resolution
+        type: float32
+      - name: width
+        type: uint32
+      - name: height
+        type: uint32
+      - name: origin
+        type: msg.core.spatial/Pose
+      - name: data
+        type: bytes
+  MapStatus:
+    description: Summary status for a mapping subsystem.
+    fields:
+      - name: map_id
+        type: string
+      - name: state
+        type: string

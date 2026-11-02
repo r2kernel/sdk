@@ -1,0 +1,9 @@
+kind: r2kernel.deployment
+version: 1
+
+instances:
+  gateway.device_gateway:
+    package: ../../subsystems/gateway.device_gateway
+    launch: managed
+
+bindings: {}

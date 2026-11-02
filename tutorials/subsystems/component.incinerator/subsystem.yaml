@@ -1,0 +1,16 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: component.incinerator
+  role: component
+
+requires:
+  timed_digital_output:
+    contract: api.io.digital.timed_output.v1
+    cardinality: one
+    required: true
+
+provides:
+  incinerator:
+    contract: component.trigger_actuator.v1

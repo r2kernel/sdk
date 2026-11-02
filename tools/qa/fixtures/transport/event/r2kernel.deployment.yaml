@@ -1,0 +1,12 @@
+kind: r2kernel.deployment
+version: 1
+
+subsystems:
+  publisher:
+    manifest: ./python/publisher.subsystem.yaml
+  subscriber:
+    manifest: ./python/subscriber.subsystem.yaml
+
+bindings:
+  subscriber.event_stream:
+    to: publisher.event_stream

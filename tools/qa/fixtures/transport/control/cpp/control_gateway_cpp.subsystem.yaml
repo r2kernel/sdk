@@ -1,0 +1,18 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: control_gateway_cpp
+  role: gateway
+
+provides:
+  control:
+    contract: tutorial.control.v1
+    visibility: internal
+    labels:
+      request_type: bytes
+      response_type: bytes
+    endpoints:
+      controls:
+        - control_cmd
+        - control_hello

@@ -1,0 +1,8 @@
+kind: r2kernel.subsystem
+version: 1
+subsystem:
+  name: fixture.raw_caller
+  role: component
+requires:
+  servo:
+    contract: api.actuator.servo.v1

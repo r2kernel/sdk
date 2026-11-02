@@ -1,0 +1,100 @@
+kind: r2kernel.deployment
+version: 1
+
+robot: ../robot/r2kernel.robot.yaml
+application: ../subsystems/app.cleaner.radar/subsystem.yaml
+
+instances:
+  app.cleaner.radar:
+    package: ../subsystems/app.cleaner.radar
+    launch: managed
+  component.mobile:
+    package: ../subsystems/component.mobile
+    slots:
+      mobile_base_controller: mobile_base
+    launch: managed
+  component.manipulation:
+    package: ../subsystems/component.manipulation
+    slots:
+      manipulator_controller: manipulator
+    launch: managed
+  component.gripper:
+    package: ../subsystems/component.gripper
+    slots:
+      gripper_controller: gripper
+    launch: managed
+  component.incinerator:
+    package: ../subsystems/component.incinerator
+    slots:
+      incinerator_component: incinerator
+    launch: managed
+  component.perception:
+    package: ../subsystems/component.perception
+    slots:
+      perception_controller: perception
+    launch: managed
+  component.localizer:
+    package: ../subsystems/component.localizer
+    slots:
+      localization_component: localizer
+    launch: managed
+  component.navigation:
+    package: ../subsystems/component.navigation
+    slots:
+      navigation_component: navigation
+    launch: managed
+  compound.cleaner:
+    package: ../subsystems/compound.cleaner
+    launch: managed
+  gateway.device_gateway:
+    package: ../subsystems/gateway.device_gateway
+    slots:
+      actuator_gateway: actuator_servo
+      timed_digital_output_gateway: timed_digital_output
+      radar_sensor_gateway: radar_source
+      gnss_sensor_gateway: gnss_source
+    launch: managed
+
+bindings:
+  app.cleaner.radar.navigation:
+    to: compound.cleaner.goal_navigation
+  app.cleaner.radar.manipulation:
+    to: compound.cleaner.articulated_trajectory
+  app.cleaner.radar.gripper:
+    to: compound.cleaner.gripper_control
+  app.cleaner.radar.trash_disposal:
+    to: compound.cleaner.trash_disposal
+  app.cleaner.radar.perception:
+    to: compound.cleaner.object_detection
+  compound.cleaner.localization:
+    to: component.localizer.localizer
+  compound.cleaner.mobility:
+    to: component.mobile.mobile_base
+  compound.cleaner.navigation:
+    to: component.navigation.navigation
+  compound.cleaner.manipulation:
+    to: component.manipulation.manipulator
+  compound.cleaner.gripper:
+    to: component.gripper.gripper
+  compound.cleaner.incinerator:
+    to: component.incinerator.incinerator
+  compound.cleaner.perception:
+    to: component.perception.perception
+  component.mobile.actuator_servo:
+    to: gateway.device_gateway.actuator_servo
+  component.manipulation.actuator_servo:
+    to: gateway.device_gateway.actuator_servo
+  component.gripper.digital_io:
+    to: gateway.device_gateway.digital_io
+  component.incinerator.timed_digital_output:
+    to: gateway.device_gateway.timed_digital_output
+  component.perception.radar_source:
+    to: gateway.device_gateway.radar_source
+  component.localizer.gnss_source:
+    to: gateway.device_gateway.gnss_source
+  component.localizer.odometry:
+    to: component.mobile.mobile_base
+  component.navigation.localization:
+    to: component.localizer.localizer
+  component.navigation.mobility:
+    to: component.mobile.mobile_base

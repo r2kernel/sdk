@@ -1,0 +1,34 @@
+schema_version: 1
+name: tutorial.robot_cleaner.mobile
+description: Robot cleaner mobile component subsystem package.
+entrypoint:
+  command: run.py
+  args:
+    - --name
+    - "{{params.subsystem.name}}"
+    - --manifest
+    - subsystem.yaml
+    - --deployment-manifest
+    - "{{params.deployment.manifest}}"
+    - --binding
+    - "{{params.binding.actuator_servo}}"
+    - --log-level
+    - "{{params.log.level}}"
+parameters:
+  subsystem.name:
+    type: string
+    default: "{{instance.id}}"
+  deployment.manifest:
+    type: string
+    default: ""
+  binding.actuator_servo:
+    type: string
+    default: actuator_servo
+  log.level:
+    type: string
+    default: INFO
+resources:
+  network:
+    interfaces: []
+  devices:
+    paths: []

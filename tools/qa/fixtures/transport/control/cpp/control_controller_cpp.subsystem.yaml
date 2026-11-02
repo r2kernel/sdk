@@ -1,0 +1,13 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: control_controller_cpp
+  role: component
+
+requires:
+  gateway:
+    contract: tutorial.control.v1
+    visibility: internal
+    cardinality: one
+    required: true

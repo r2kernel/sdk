@@ -1,0 +1,76 @@
+version: 1
+id: msg.sensor.camera.v1
+kind: message_set
+description: Camera source Control API messages with actual sample time and typed visual transfer parts.
+imports:
+  msg.control: v1
+  msg.stream: v1
+  msg.visual: v1
+messages:
+  CameraIntrinsics:
+    description: Pinhole camera calibration associated with a camera format revision.
+    fields:
+    - name: width
+      type: uint32
+    - name: height
+      type: uint32
+    - name: fx
+      type: float64
+    - name: fy
+      type: float64
+    - name: cx
+      type: float64
+    - name: cy
+      type: float64
+    - name: distortion_model
+      type: string
+      optional: true
+    - name: distortion_coefficients
+      type: vector<float64>
+      optional: true
+  CameraStreamFormat:
+    description: Camera calibration and visual format fixed by one format revision.
+    fields:
+    - name: camera_frame_id
+      type: string
+    - name: intrinsics
+      type: CameraIntrinsics
+    - name: visual_format
+      type: msg.visual/VisualStreamFormat
+    - name: calibration_revision
+      type: int64
+  CameraCycleRequest:
+    description: >-
+      Requests a prepared sample for this sample-exchange cycle. The provider may return
+      no new sample while the Control connection remains healthy.
+    fields:
+    - name: cycle
+      type: msg.control/ControlCycle
+    - name: after_sample_id
+      type: int64
+      optional: true
+    - name: after_unit_sequence
+      type: int64
+      optional: true
+    - name: resync_required
+      type: bool
+      optional: true
+  CameraCycleResponse:
+    description: >-
+      One prepared visual transfer part or a normal no-new-sample result. Source sample
+      acquisition and expiry stay attached to the part and never inherit poll time.
+    fields:
+    - name: cycle
+      type: msg.control/ControlCycle
+    - name: status
+      type: string
+      description: sample_available, no_new_sample, resync_required, unsupported_configuration, or device_error.
+    - name: part
+      type: msg.visual/VisualTransferPart
+      optional: true
+    - name: camera_format
+      type: CameraStreamFormat
+      optional: true
+    - name: detail
+      type: string
+      optional: true

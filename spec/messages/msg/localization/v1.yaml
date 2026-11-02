@@ -1,0 +1,38 @@
+version: 1
+id: msg.localization.v1
+kind: message_set
+description: Localization payload family for self-pose estimation status.
+imports:
+  msg.core.spatial: v1
+messages:
+  PoseEstimate:
+    description: Estimated robot pose with spatial uncertainty.
+    fields:
+      - name: frame_id
+        type: string
+        description: Reference frame in which the estimated pose is expressed.
+      - name: pose
+        type: msg.core.spatial/Pose
+        description: Mean self-pose estimate.
+      - name: covariance
+        type: msg.core.spatial/Covariance6x6
+        description: Pose covariance expressed in the ordering defined by the consuming localization API contract.
+      - name: quality
+        type: float32
+        optional: true
+        description: Optional normalized quality score from the estimator.
+      - name: source
+        type: string
+        optional: true
+        description: Optional estimator or source identifier.
+  LocalizationStatus:
+    description: Summary state for a localization subsystem.
+    fields:
+      - name: state
+        type: string
+      - name: quality
+        type: float32
+        optional: true
+      - name: map_id
+        type: string
+        optional: true

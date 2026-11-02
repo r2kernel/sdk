@@ -1,0 +1,20 @@
+version: 1
+id: component.mobile_base.autonomous.v1
+kind: component
+name: Autonomous Mobile Base Controller
+description: Wheeled mobile-base controller with localization and navigation.
+conformance_apis:
+  - api.locomotion.velocity.v1
+  - api.locomotion.velocity_reference.v1
+  - api.locomotion.mobile_base.state.v1
+  - api.localization.v1
+  - api.navigation.v1
+spatial:
+  participation: required
+  ports:
+    reference:
+      direction: export
+      semantic: map_reference
+    body:
+      direction: export
+      semantic: mobile_body

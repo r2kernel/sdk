@@ -1,0 +1,129 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: compound.cleaner
+  role: compound
+
+spatial:
+  participation: required
+  ports:
+    map:
+      direction: export
+      semantic: map_reference
+      source:
+        requirement: localization
+        port: map
+    body:
+      direction: export
+      semantic: mobile_body
+      source:
+        requirement: mobility
+        port: body
+    tool:
+      direction: export
+      semantic: tool_center_point
+      source:
+        requirement: manipulation
+        port: tool
+  mounts:
+    - name: arm_on_body
+      parent:
+        requirement: mobility
+        port: body
+      child:
+        requirement: manipulation
+        port: base
+      transform:
+        translation: [0.0, 0.0, 0.0]
+        rotation_xyzw: [0.0, 0.0, 0.0, 1.0]
+    - name: gripper_on_tool
+      parent:
+        requirement: manipulation
+        port: tool
+      child:
+        requirement: gripper
+        port: base
+      transform:
+        translation: [0.0, 0.0, 0.0]
+        rotation_xyzw: [0.0, 0.0, 0.0, 1.0]
+    - name: radar_on_body
+      parent:
+        requirement: mobility
+        port: body
+      child:
+        requirement: perception
+        port: sensor
+      transform:
+        translation: [0.08, 0.03, 0.0]
+        rotation_xyzw: [0.0, 0.0, 0.13052619222005157, 0.9914448613738104]
+    - name: gnss_antenna_on_body
+      parent:
+        requirement: mobility
+        port: body
+      child:
+        requirement: localization
+        port: antenna
+      transform:
+        translation: [0.12, -0.04, 0.25]
+        rotation_xyzw: [0.0, 0.0, 0.0, 1.0]
+
+requires:
+  localization:
+    contract: component.localizer.v1
+    cardinality: one
+    required: true
+  mobility:
+    contract: component.mobile_base.odometry.v1
+    cardinality: one
+    required: true
+  navigation:
+    contract: component.navigation.v1
+    cardinality: one
+    required: true
+  manipulation:
+    contract: component.manipulator.v1
+    cardinality: one
+    required: true
+  gripper:
+    contract: component.gripper.v1
+    cardinality: one
+    required: true
+  incinerator:
+    contract: component.trigger_actuator.v1
+    cardinality: one
+    required: true
+  perception:
+    contract: component.perception.v1
+    cardinality: one
+    required: true
+
+exports:
+  localization:
+    contract: api.localization.v1
+    from:
+      requirement: localization
+  body_motion:
+    contract: api.locomotion.velocity_reference.v1
+    from:
+      requirement: mobility
+  goal_navigation:
+    contract: api.navigation.v1
+    from:
+      requirement: navigation
+  articulated_trajectory:
+    contract: api.motion.articulated.trajectory.v1
+    from:
+      requirement: manipulation
+  gripper_control:
+    contract: api.end_effector.gripper.v1
+    from:
+      requirement: gripper
+  trash_disposal:
+    contract: api.actuation.trigger.v1
+    from:
+      requirement: incinerator
+  object_detection:
+    contract: api.perception.query.v1
+    from:
+      requirement: perception

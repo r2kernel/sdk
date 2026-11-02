@@ -1,0 +1,21 @@
+version: 1
+id: component.articulated.trajectory.v1
+kind: component
+name: Articulated Trajectory Controller
+description: Generic jointed controller that supports programmed joint motion.
+conformance_apis:
+  - api.motion.articulated.state.v1
+  - api.motion.articulated.trajectory.v1
+recommended_apis:
+  - api.motion.execution.v1
+optional_apis:
+  - api.motion.articulated.trajectory.offset.v1
+spatial:
+  participation: required
+  ports:
+    base:
+      direction: import
+      semantic: articulated_mount
+    tip:
+      direction: export
+      semantic: articulated_tip

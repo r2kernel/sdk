@@ -1,0 +1,28 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: component.manipulation
+  role: component
+
+spatial:
+  participation: required
+  ports:
+    base:
+      direction: import
+      semantic: manipulator_mount
+      frame: arm_base
+    tool:
+      direction: export
+      semantic: tool_center_point
+      frame: cleaner_gripper
+
+requires:
+  actuator_servo:
+    contract: api.actuator.servo.v1
+    cardinality: one
+    required: true
+
+provides:
+  manipulator:
+    contract: component.manipulator.v1

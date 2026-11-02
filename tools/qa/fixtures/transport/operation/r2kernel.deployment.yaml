@@ -1,0 +1,18 @@
+kind: r2kernel.deployment
+version: 1
+
+subsystems:
+  operation_client:
+    manifest: ./python/operation_client.subsystem.yaml
+  operation_server:
+    manifest: ./python/operation_server.subsystem.yaml
+  operation_client_cpp:
+    manifest: ./cpp/operation_client_cpp.subsystem.yaml
+  operation_server_cpp:
+    manifest: ./cpp/operation_server_cpp.subsystem.yaml
+
+bindings:
+  operation_client.operation:
+    to: operation_server.operation
+  operation_client_cpp.operation:
+    to: operation_server_cpp.operation

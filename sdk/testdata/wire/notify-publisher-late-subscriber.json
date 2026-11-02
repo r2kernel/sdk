@@ -1,0 +1,35 @@
+{
+  "description": "notify_publisher pushed to a subscriber that joined after the publisher: replay_existing is false (start at the latest Event)",
+  "message": {
+    "cmd": "notify_publisher",
+    "entry_slot_count": 1,
+    "lock_name": "/r2kernel_7d9c6e0aa191a7de",
+    "publish_slot_count": 2,
+    "publish_slot_index": 0,
+    "publisher": "component.wire_publisher",
+    "queue_depth": 2,
+    "replay_existing": false,
+    "topic": "scan"
+  },
+  "producer": "control backend state/transport_state/notifications.rs queue_notify_publisher_if_changed",
+  "readers": [
+    "python: core/_event_registration.py (request_publish_slots, register_subscription), core/event_client.py _process_notify_message",
+    "cpp: src/core/client_impl_events.hpp, client_control_exchange.hpp json_subscriber_locks/json_publishers, client_impl_runtime_registration.hpp (notify_publisher/notify_subscriber)",
+    "rust bench client: src/control.rs request_publish_slots/register_subscription, src/stamped_stream_runtime.rs PublisherOffer and notify_subscriber"
+  ],
+  "types": {
+    "cmd": "string",
+    "entry_slot_count": "integer",
+    "lock_name": "string",
+    "publish_slot_count": "integer",
+    "publish_slot_index": "integer",
+    "publisher": "string",
+    "queue_depth": "integer",
+    "replay_existing": "boolean",
+    "topic": "string"
+  },
+  "volatile": [
+    "lock_name"
+  ],
+  "wire": "{\"cmd\":\"notify_publisher\",\"entry_slot_count\":1,\"lock_name\":\"/r2kernel_7d9c6e0aa191a7de\",\"publish_slot_count\":2,\"publish_slot_index\":0,\"publisher\":\"component.wire_publisher\",\"queue_depth\":2,\"replay_existing\":false,\"topic\":\"scan\"}"
+}

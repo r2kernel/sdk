@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cleaner Teleop</title>
+    <link rel="stylesheet" href="./styles.css?v=teleop-app-2" />
+  </head>
+  <body>
+    <main class="teleop-shell">
+      <header class="teleop-header">
+        <div>
+          <p class="eyebrow">R2Kernel App</p>
+          <h1>Cleaner Teleop</h1>
+        </div>
+        <div class="status-pill" id="connection-state">connecting</div>
+      </header>
+
+      <section class="panel drive-panel">
+        <h2>Drive</h2>
+        <div class="dpad">
+          <button data-command="rotate_left">Q</button>
+          <button data-command="forward">W</button>
+          <button data-command="rotate_right">E</button>
+          <button data-command="left">A</button>
+          <button data-command="backward">S</button>
+          <button data-command="right">D</button>
+        </div>
+      </section>
+
+      <section class="panel manipulator-panel">
+        <h2>Manipulator</h2>
+        <div class="button-grid two">
+          <button data-command="extend">H Extend</button>
+          <button data-command="shrink">J Shrink</button>
+          <button data-command="open">K Open</button>
+          <button data-command="close">L Close</button>
+          <button class="wide" data-command="burn">Space Burn</button>
+        </div>
+      </section>
+
+      <section class="panel action-panel">
+        <h2>Action</h2>
+        <div class="action-card">
+          <div>
+            <span>Last</span>
+            <strong id="action-name">idle</strong>
+          </div>
+          <div>
+            <span>State</span>
+            <strong id="action-state">idle</strong>
+          </div>
+        </div>
+        <div class="action-steps" id="action-steps"></div>
+      </section>
+
+      <section class="panel log-panel">
+        <h2>Runtime Log</h2>
+        <pre id="log-view"></pre>
+      </section>
+    </main>
+    <script src="./app.js?v=teleop-app-2"></script>
+  </body>
+</html>

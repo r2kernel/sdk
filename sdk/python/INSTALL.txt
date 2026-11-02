@@ -1,0 +1,25 @@
+R2Kernel Python SDK install notes
+=============================
+
+For public source checkouts, the recommended path is editable install:
+
+  python3 -m venv .venv
+  . .venv/bin/activate
+  pip install -e sdk/python
+
+Install the test extra when running the SDK unit tests:
+
+  pip install -e "sdk/python[test]"
+  python -m pytest sdk/python/tests -q
+
+If the R2Kernel runtime was installed into a custom prefix, source the generated
+runtime environment first:
+
+  . /path/to/r2kernel/env.sh
+
+The wheel copied under <prefix>/sdk/python uses a platform-specific py3-none tag,
+for example py3-none-linux_x86_64. It is intended for supported Python 3
+interpreters on the matching platform. Older alpha releases may contain cp311
+wheels; those install only into CPython 3.11. Use editable install from the
+public source checkout when the copied wheel does not match your active Python
+environment.

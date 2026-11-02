@@ -1,0 +1,14 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: publisher
+  role: component
+
+provides:
+  event_stream:
+    contract: tutorial.transport.event_stream.v1
+    visibility: internal
+    endpoints:
+      publishes:
+        - x

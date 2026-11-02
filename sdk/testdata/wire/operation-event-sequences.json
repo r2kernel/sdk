@@ -1,0 +1,374 @@
+{
+  "contract": {
+    "feedback_type": "msg.core.spatial.v1/Pose",
+    "request_type": "bytes",
+    "result_type": "msg.core.common.result.v1/Result",
+    "state_type": "msg.core.common.primitive.v1/Float32Vector"
+  },
+  "description": "Operation event sequences of a Python provider, one per way an Operation ends. Each event is the SDAE event without its timestamp and operation id. queued and running are never published.",
+  "operation": "move_to_pose",
+  "payloads": {
+    "feedback": {
+      "orientation": {
+        "w": 1.0,
+        "x": 0.0,
+        "y": 0.0,
+        "z": 0.5
+      },
+      "position": {
+        "x": 1.0,
+        "y": 2.5,
+        "z": -0.25
+      }
+    },
+    "result": {
+      "status": "reached",
+      "success": true
+    },
+    "state": {
+      "values": [
+        0.25,
+        -1.5,
+        3.0
+      ]
+    }
+  },
+  "producer": "python: core/_runtime_operation_server.py (_accept_operation, _run_operation, complete_operation, _publish_operation_*), _runtime_dispatch.py _build_operation_cancel_response, _runtime_procedures.py _stop_operation_server",
+  "readers": [
+    "cpp: tests/operation_typed_payload_test.cpp (JSON and encoded-bytes publication)"
+  ],
+  "scenarios": {
+    "cancel_request": {
+      "cancel_requested": true,
+      "events": [
+        {
+          "flag_names": [
+            "PAYLOAD",
+            "TYPED",
+            "STATE"
+          ],
+          "kind": "state",
+          "payload_hex": "10000000030000000000803e0000c0bf00004040",
+          "payload_type": "msg.core.common.primitive.v1/Float32Vector",
+          "state": "approaching"
+        },
+        {
+          "flag_names": [
+            "CANCEL_REQUESTED",
+            "STATE"
+          ],
+          "kind": "state",
+          "payload_hex": "",
+          "payload_type": "msg.core.common.primitive.v1/Float32Vector",
+          "state": "cancel_requested"
+        },
+        {
+          "flag_names": [
+            "CANCEL_REQUESTED",
+            "STATE"
+          ],
+          "kind": "state",
+          "payload_hex": "",
+          "payload_type": "msg.core.common.primitive.v1/Float32Vector",
+          "state": "canceled"
+        },
+        {
+          "flag_names": [
+            "PAYLOAD",
+            "TYPED"
+          ],
+          "kind": "result",
+          "payload_hex": "01000000010700000072656163686564ffffffff",
+          "payload_type": "msg.core.common.result.v1/Result",
+          "state": ""
+        }
+      ],
+      "final_state": "canceled",
+      "handler": "publish_state('approaching', state); wait for a cancel request (operation.cancel); publish_state('still_running') (suppressed); return result",
+      "result_stored": true,
+      "start_reply_state": "queued"
+    },
+    "fails_with_payload": {
+      "cancel_requested": false,
+      "events": [
+        {
+          "flag_names": [
+            "STATE"
+          ],
+          "kind": "state",
+          "payload_hex": "",
+          "payload_type": "msg.core.common.primitive.v1/Float32Vector",
+          "state": "failed"
+        },
+        {
+          "flag_names": [
+            "PAYLOAD",
+            "TYPED"
+          ],
+          "kind": "result",
+          "payload_hex": "01000000010700000072656163686564ffffffff",
+          "payload_type": "msg.core.common.result.v1/Result",
+          "state": ""
+        }
+      ],
+      "final_state": "failed",
+      "handler": "context.fail(error_code='blocked', error_message='blocked', payload=result); return None",
+      "result_stored": true,
+      "start_reply_state": "queued"
+    },
+    "raises": {
+      "cancel_requested": false,
+      "events": [
+        {
+          "flag_names": [
+            "PAYLOAD",
+            "TYPED"
+          ],
+          "kind": "feedback",
+          "payload_hex": "18000000040000000000803f040000000000204004000000000080be2000000004000000000000000400000000000000040000000000003f040000000000803f",
+          "payload_type": "msg.core.spatial.v1/Pose",
+          "state": ""
+        },
+        {
+          "flag_names": [
+            "STATE"
+          ],
+          "kind": "state",
+          "payload_hex": "",
+          "payload_type": "msg.core.common.primitive.v1/Float32Vector",
+          "state": "failed"
+        }
+      ],
+      "final_state": "failed",
+      "handler": "publish_feedback(feedback); raise an exception (no result)",
+      "result_stored": false,
+      "start_reply_state": "queued"
+    },
+    "returns": {
+      "cancel_requested": false,
+      "events": [
+        {
+          "flag_names": [
+            "PAYLOAD",
+            "TYPED"
+          ],
+          "kind": "feedback",
+          "payload_hex": "18000000040000000000803f040000000000204004000000000080be2000000004000000000000000400000000000000040000000000003f040000000000803f",
+          "payload_type": "msg.core.spatial.v1/Pose",
+          "state": ""
+        },
+        {
+          "flag_names": [
+            "PAYLOAD",
+            "TYPED",
+            "STATE"
+          ],
+          "kind": "state",
+          "payload_hex": "10000000030000000000803e0000c0bf00004040",
+          "payload_type": "msg.core.common.primitive.v1/Float32Vector",
+          "state": "approaching"
+        },
+        {
+          "flag_names": [
+            "STATE"
+          ],
+          "kind": "state",
+          "payload_hex": "",
+          "payload_type": "msg.core.common.primitive.v1/Float32Vector",
+          "state": "succeeded"
+        },
+        {
+          "flag_names": [
+            "PAYLOAD",
+            "TYPED"
+          ],
+          "kind": "result",
+          "payload_hex": "01000000010700000072656163686564ffffffff",
+          "payload_type": "msg.core.common.result.v1/Result",
+          "state": ""
+        }
+      ],
+      "final_state": "succeeded",
+      "handler": "publish_feedback(feedback); publish_state('approaching', state); return result",
+      "result_stored": true,
+      "start_reply_state": "queued"
+    },
+    "stop_operation_server": {
+      "cancel_requested": true,
+      "events": [
+        {
+          "flag_names": [
+            "PAYLOAD",
+            "TYPED",
+            "STATE"
+          ],
+          "kind": "state",
+          "payload_hex": "10000000030000000000803e0000c0bf00004040",
+          "payload_type": "msg.core.common.primitive.v1/Float32Vector",
+          "state": "approaching"
+        },
+        {
+          "flag_names": [
+            "CANCEL_REQUESTED",
+            "STATE"
+          ],
+          "kind": "state",
+          "payload_hex": "",
+          "payload_type": "msg.core.common.primitive.v1/Float32Vector",
+          "state": "cancel_requested"
+        },
+        {
+          "flag_names": [
+            "CANCEL_REQUESTED",
+            "STATE"
+          ],
+          "kind": "state",
+          "payload_hex": "",
+          "payload_type": "msg.core.common.primitive.v1/Float32Vector",
+          "state": "canceled"
+        },
+        {
+          "flag_names": [
+            "PAYLOAD",
+            "TYPED"
+          ],
+          "kind": "result",
+          "payload_hex": "01000000010700000072656163686564ffffffff",
+          "payload_type": "msg.core.common.result.v1/Result",
+          "state": ""
+        }
+      ],
+      "final_state": "canceled",
+      "handler": "publish_state('approaching', state); stop_operation_server() requests cancellation after its grace period; publish_state('still_running') (suppressed); return result",
+      "result_stored": true,
+      "start_reply_state": "queued"
+    },
+    "terminal_canceled_then_cancel_request": {
+      "cancel_requested": false,
+      "events": [
+        {
+          "flag_names": [
+            "STATE"
+          ],
+          "kind": "state",
+          "payload_hex": "",
+          "payload_type": "msg.core.common.primitive.v1/Float32Vector",
+          "state": "canceled"
+        }
+      ],
+      "final_state": "canceled",
+      "handler": "publish_state('canceled'); held until released; operation.cancel, then operation.query, while held; released; return result (ignored)",
+      "result_stored": false,
+      "start_reply_state": "queued",
+      "while_held": {
+        "cancel_reply_cancel_requested": false,
+        "query_cancel_requested": false,
+        "query_state": "canceled"
+      }
+    },
+    "terminal_failed_then_cancel_request": {
+      "cancel_requested": false,
+      "events": [
+        {
+          "flag_names": [
+            "STATE"
+          ],
+          "kind": "state",
+          "payload_hex": "",
+          "payload_type": "msg.core.common.primitive.v1/Float32Vector",
+          "state": "failed"
+        }
+      ],
+      "final_state": "failed",
+      "handler": "publish_state('failed'); held until released; operation.cancel, then operation.query, while held; released; return result (ignored)",
+      "result_stored": false,
+      "start_reply_state": "queued",
+      "while_held": {
+        "cancel_reply_cancel_requested": false,
+        "query_cancel_requested": false,
+        "query_state": "failed"
+      }
+    },
+    "terminal_failed_then_stop_operation_server": {
+      "cancel_requested": false,
+      "events": [
+        {
+          "flag_names": [
+            "STATE"
+          ],
+          "kind": "state",
+          "payload_hex": "",
+          "payload_type": "msg.core.common.primitive.v1/Float32Vector",
+          "state": "failed"
+        }
+      ],
+      "final_state": "failed",
+      "handler": "publish_state('failed'); held until released; stop_operation_server() while held; released; return result (ignored)",
+      "result_stored": false,
+      "start_reply_state": "queued",
+      "while_held": {
+        "cancel_requested_after_stop": false
+      }
+    },
+    "terminal_state_then_raises": {
+      "cancel_requested": false,
+      "events": [
+        {
+          "flag_names": [
+            "STATE"
+          ],
+          "kind": "state",
+          "payload_hex": "",
+          "payload_type": "msg.core.common.primitive.v1/Float32Vector",
+          "state": "canceled"
+        }
+      ],
+      "final_state": "canceled",
+      "handler": "publish_state('canceled'); raise an exception (ignored)",
+      "result_stored": false,
+      "start_reply_state": "queued"
+    },
+    "terminal_state_then_returns": {
+      "cancel_requested": false,
+      "events": [
+        {
+          "flag_names": [
+            "STATE"
+          ],
+          "kind": "state",
+          "payload_hex": "",
+          "payload_type": "msg.core.common.primitive.v1/Float32Vector",
+          "state": "failed"
+        }
+      ],
+      "final_state": "failed",
+      "handler": "publish_state('failed'); return result (ignored: no result is stored or published)",
+      "result_stored": false,
+      "start_reply_state": "queued"
+    },
+    "terminal_succeeded_then_cancel_request": {
+      "cancel_requested": false,
+      "events": [
+        {
+          "flag_names": [
+            "STATE"
+          ],
+          "kind": "state",
+          "payload_hex": "",
+          "payload_type": "msg.core.common.primitive.v1/Float32Vector",
+          "state": "succeeded"
+        }
+      ],
+      "final_state": "succeeded",
+      "handler": "publish_state('succeeded'); held until released; operation.cancel, then operation.query, while held; released; return result (ignored)",
+      "result_stored": false,
+      "start_reply_state": "queued",
+      "while_held": {
+        "cancel_reply_cancel_requested": false,
+        "query_cancel_requested": false,
+        "query_state": "succeeded"
+      }
+    }
+  },
+  "target": "component.wire_fixture"
+}

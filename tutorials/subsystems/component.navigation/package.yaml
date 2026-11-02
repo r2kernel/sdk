@@ -1,0 +1,49 @@
+schema_version: 1
+name: tutorial.robot_cleaner.navigation
+description: Robot cleaner map-relative goal navigation component package.
+entrypoint:
+  command: run.py
+  args:
+    - --name
+    - "{{params.subsystem.name}}"
+    - --manifest
+    - subsystem.yaml
+    - --deployment-manifest
+    - "{{params.deployment.manifest}}"
+    - --log-level
+    - "{{params.log.level}}"
+    - --position-tolerance
+    - "{{params.navigation.position_tolerance}}"
+    - --yaw-tolerance-deg
+    - "{{params.navigation.yaw_tolerance_deg}}"
+    - --max-linear
+    - "{{params.navigation.max_linear}}"
+    - --max-angular
+    - "{{params.navigation.max_angular}}"
+parameters:
+  subsystem.name:
+    type: string
+    default: "{{instance.id}}"
+  deployment.manifest:
+    type: string
+    default: ""
+  log.level:
+    type: string
+    default: INFO
+  navigation.position_tolerance:
+    type: number
+    default: 0.018
+  navigation.yaw_tolerance_deg:
+    type: number
+    default: 4.0
+  navigation.max_linear:
+    type: number
+    default: 0.70
+  navigation.max_angular:
+    type: number
+    default: 1.0
+resources:
+  network:
+    interfaces: []
+  devices:
+    paths: []

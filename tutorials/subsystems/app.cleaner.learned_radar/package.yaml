@@ -1,0 +1,66 @@
+schema_version: 1
+name: tutorial.robot_cleaner.learned_radar
+description: Model-based cleaner application trained from radar coverage and approach demonstrations.
+entrypoint:
+  command: run.py
+  args:
+    - --name
+    - "{{params.subsystem.name}}"
+    - --manifest
+    - subsystem.yaml
+    - --deployment-manifest
+    - "{{params.deployment.manifest}}"
+    - --log-level
+    - "{{params.log.level}}"
+    - --auto-start
+    - "{{params.behavior.auto_start}}"
+    - --model
+    - "{{params.model.path}}"
+    - --scan-range
+    - "{{params.perception.scan_range}}"
+    - --collect-distance
+    - "{{params.behavior.collect_distance}}"
+    - --collect-bearing-deg
+    - "{{params.behavior.collect_bearing_deg}}"
+    - --loop-period
+    - "{{params.behavior.loop_period}}"
+    - --search-period
+    - "{{params.behavior.search_period}}"
+parameters:
+  subsystem.name:
+    type: string
+    default: "{{instance.id}}"
+  deployment.manifest:
+    type: string
+    default: ""
+  log.level:
+    type: string
+    default: INFO
+  model.path:
+    type: string
+    default: radar_policy_v1.json
+  behavior.auto_start:
+    type: bool
+    default: true
+  behavior.collect_distance:
+    type: number
+    default: 0.18
+  behavior.collect_bearing_deg:
+    type: number
+    default: 7.0
+  behavior.loop_period:
+    type: number
+    default: 0.12
+  behavior.search_period:
+    type: number
+    default: 32.0
+  perception.scan_range:
+    type: number
+    default: 0.30
+resources:
+  network:
+    interfaces: []
+  devices:
+    paths: []
+  sandbox:
+    network: brokered

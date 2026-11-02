@@ -1,0 +1,65 @@
+{
+  "decoded": {
+    "kind": "feedback",
+    "operation": "move_to_pose",
+    "operation_id": "6f1c2a4b9d8e4f0a8b7c6d5e4f3a2b1c",
+    "payload": {
+      "progress": 0.5,
+      "step": "approach"
+    },
+    "target": "component.wire_fixture",
+    "ts": 1793463571833069599
+  },
+  "description": "Operation feedback event with a JSON payload and no contract type",
+  "input": {
+    "cancel_requested": false,
+    "kind": "feedback",
+    "operation": "move_to_pose",
+    "operation_id": "6f1c2a4b9d8e4f0a8b7c6d5e4f3a2b1c",
+    "payload": {
+      "progress": 0.5,
+      "step": "approach"
+    },
+    "payload_type": null,
+    "state": null,
+    "target": "component.wire_fixture",
+    "ts": 1793463571833069599
+  },
+  "layout": {
+    "fields": {
+      "operation": "move_to_pose",
+      "operation_id": "6f1c2a4b9d8e4f0a8b7c6d5e4f3a2b1c",
+      "payload_type": "",
+      "state": "",
+      "target": "component.wire_fixture"
+    },
+    "flag_names": [
+      "PAYLOAD",
+      "JSON"
+    ],
+    "flags": 3,
+    "header_format": "<4sBBHqHHHHHI (little-endian, 30 bytes), then the fields in this order",
+    "kind": "feedback",
+    "kind_code": 1,
+    "lengths": {
+      "operation": 12,
+      "operation_id": 32,
+      "payload": 37,
+      "payload_type": 0,
+      "state": 0,
+      "target": 22
+    },
+    "magic": "SDAE",
+    "payload_hex": "7b2270726f6772657373223a20302e352c202273746570223a2022617070726f616368227d",
+    "payload_text": "{\"progress\": 0.5, \"step\": \"approach\"}",
+    "ts": 1793463571833069599,
+    "version": 1
+  },
+  "producer": "python: core/_runtime_operation_server.py _OperationExecutionMixin._encode_operation_event_wire",
+  "readers": [
+    "python: core/_runtime_operation_server.py _register_operation_subscription -> _decode_operation_event_wire",
+    "cpp: src/wrapper/operation_event_wire.hpp decode + to_message (subsystem.cpp subscribe_operation_*_impl)",
+    "rust bench client: src/operation_event.rs decode_operation_event_with (Subsystem::operation_event)"
+  ],
+  "wire_hex": "53444145010103001fa0b6cc9da9e31820000c001600000000002500000036663163326134623964386534663061386237633664356534663361326231636d6f76655f746f5f706f7365636f6d706f6e656e742e776972655f666978747572657b2270726f6772657373223a20302e352c202273746570223a2022617070726f616368227d"
+}

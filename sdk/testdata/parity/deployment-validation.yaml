@@ -1,0 +1,830 @@
+# Deployment manifest validation cases shared by the Python and C++ SDKs
+# (manifest-validation.yaml holds the single-manifest cases).
+# Read by sdk/python/tests/test_sdk_parity_cases.py (also
+# test_manifests_deployment.py for model checks) and
+# sdk/cpp/tests/sdk_parity_cases_test.cpp.
+#
+# Each case writes `files` (relative path -> text) into an empty directory and
+# loads `path` with the loader named by `load` (subsystem, robot, application
+# or deployment: Python r2kernel.manifest.load_*_manifest, C++
+# r2kernel::wrapper::load_*_manifest). `expect: accept` must load; `expect:
+# reject` must raise ManifestError whose message contains `error`.
+
+shared:
+  gateway_servo: &gateway_servo |
+    kind: r2kernel.subsystem
+    version: 1
+    subsystem: {name: gateway.device_gateway, role: gateway}
+    provides:
+      actuator_servo: {contract: api.actuator.servo.v1}
+  procedure_client: &procedure_client |
+    kind: r2kernel.subsystem
+    version: 1
+    subsystem: {name: client, role: component}
+    requires:
+      service: {contract: tutorial.transport.procedure.v1, visibility: internal}
+  procedure_server: &procedure_server |
+    kind: r2kernel.subsystem
+    version: 1
+    subsystem: {name: server, role: component}
+    provides:
+      service: {contract: tutorial.transport.procedure.v1, visibility: internal}
+  cleaner_robot: &cleaner_robot |
+    kind: r2kernel.robot
+    version: 1
+    robot:
+      name: cleaner_2d
+      profiles: [tutorial.robot_cleaner.cleaner_2d.v1]
+    kinematics: {source: ./robot.urdf}
+    slots:
+      perception_component: {role: component, contract: api.perception.query.v1}
+      digital_gateway: {role: gateway, contract: api.io.digital.timed_output.v1}
+  pick_place_app: &pick_place_app |
+    kind: r2kernel.subsystem
+    version: 1
+    subsystem: {name: app.pick_place, role: app}
+    application:
+      requires_robot:
+        profiles: [tutorial.robot_cleaner.cleaner_2d.v1]
+    requires:
+      objects: {contract: api.perception.query.v1}
+  perception_component: &perception_component |
+    kind: r2kernel.subsystem
+    version: 1
+    subsystem: {name: component.perception, role: component}
+    provides:
+      object_detection: {contract: api.perception.query.v1}
+  arm_gateway: &arm_gateway |
+    kind: r2kernel.subsystem
+    version: 1
+    subsystem: {name: gateway.arm, role: gateway}
+    provides:
+      digital: {contract: api.io.digital.timed_output.v1}
+  empty_robot: &empty_robot |
+    kind: r2kernel.robot
+    version: 1
+    robot: {name: platform}
+    slots: {}
+  localizer: &localizer |
+    kind: r2kernel.subsystem
+    version: 1
+    subsystem: {name: localizer, role: component}
+    spatial:
+      participation: required
+      ports:
+        map: {direction: export, semantic: map_reference, frame: map}
+        body: {direction: export, semantic: localized_body, frame: body}
+        sensor: {direction: import, semantic: observation_frame, frame: sensor}
+    provides:
+      localization: {contract: tutorial.localization.v1, visibility: internal}
+
+cases:
+  # Deployment manifests -----------------------------------------------------
+  - name: deployment_binding
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: accept
+    files:
+      client.subsystem.yaml: *procedure_client
+      server.subsystem.yaml: *procedure_server
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        subsystems:
+          client: {manifest: ./client.subsystem.yaml}
+          server: {manifest: ./server.subsystem.yaml}
+        bindings:
+          client.service: {to: server.service}
+  - name: deployment_wrong_kind
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Deployment manifest kind must be 'r2kernel.deployment'"
+    files:
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.robot
+        version: 1
+  - name: deployment_subsystem_key_mismatch
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Deployment subsystem key 'other' does not match manifest subsystem.name 'client'"
+    files:
+      client.subsystem.yaml: *procedure_client
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        subsystems:
+          other: ./client.subsystem.yaml
+  - name: deployment_contract_mismatch
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Binding contract mismatch: client.service requires expected.v1, but server.service provides actual.v1"
+    files:
+      client.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: client, role: component}
+        requires:
+          service: {contract: expected.v1, visibility: internal}
+      server.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: server, role: component}
+        provides:
+          service: {contract: actual.v1, visibility: internal}
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        subsystems:
+          client: {manifest: ./client.subsystem.yaml}
+          server: {manifest: ./server.subsystem.yaml}
+        bindings:
+          client.service: {to: server.service}
+  - name: deployment_missing_required_binding
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Required binding is missing: client.service"
+    files:
+      client.subsystem.yaml: *procedure_client
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        subsystems:
+          client: {manifest: ./client.subsystem.yaml}
+        bindings: {}
+  - name: deployment_selector_binding
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Selector bindings are not supported yet: client.service"
+    files:
+      client.subsystem.yaml: *procedure_client
+      server.subsystem.yaml: *procedure_server
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        subsystems:
+          client: ./client.subsystem.yaml
+          server: ./server.subsystem.yaml
+        bindings:
+          client.service: {select: {}}
+  - name: deployment_binding_target_not_declared
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Binding target subsystem is not declared: ghost"
+    files:
+      client.subsystem.yaml: *procedure_client
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        subsystems:
+          client: ./client.subsystem.yaml
+        bindings:
+          client.service: ghost.service
+  - name: deployment_binding_source_not_declared
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Deployment does not declare subsystem: ghost"
+    files:
+      server.subsystem.yaml: *procedure_server
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        subsystems:
+          server: ./server.subsystem.yaml
+        bindings:
+          ghost.service: server.service
+  - name: deployment_app_binds_gateway
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Subsystem app.reader with role 'app' cannot bind directly to gateway subsystem gateway.io; bind through a component"
+    files:
+      app.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: app.reader, role: app}
+        requires:
+          io: {contract: vendor.io.v1, visibility: internal}
+      gateway.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: gateway.io, role: gateway}
+        provides:
+          io:
+            contract: vendor.io.v1
+            visibility: internal
+            endpoints: {controls: [io_command]}
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        subsystems:
+          app.reader: ./app.subsystem.yaml
+          gateway.io: ./gateway.subsystem.yaml
+        bindings:
+          app.reader.io: gateway.io.io
+  - name: deployment_ambiguous_control_binding_group
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Ambiguous Control binding group identity"
+    files:
+      mobile.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+        requires:
+          base_servo: {contract: api.actuator.servo.v1}
+          arm_servo: {contract: api.actuator.servo.v1}
+      gateway.subsystem.yaml: *gateway_servo
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        subsystems:
+          component.mobile: {manifest: ./mobile.subsystem.yaml}
+          gateway.device_gateway: {manifest: ./gateway.subsystem.yaml}
+        bindings:
+          component.mobile.base_servo: {to: gateway.device_gateway.actuator_servo}
+          component.mobile.arm_servo: {to: gateway.device_gateway.actuator_servo}
+  - name: deployment_shared_control_provider_for_distinct_sources
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: accept
+    files:
+      mobile.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+        requires:
+          actuator_servo: {contract: api.actuator.servo.v1}
+      manipulation.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.manipulation, role: component}
+        requires:
+          actuator_servo: {contract: api.actuator.servo.v1}
+      gateway.subsystem.yaml: *gateway_servo
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        subsystems:
+          component.mobile: {manifest: ./mobile.subsystem.yaml}
+          component.manipulation: {manifest: ./manipulation.subsystem.yaml}
+          gateway.device_gateway: {manifest: ./gateway.subsystem.yaml}
+        bindings:
+          component.mobile.actuator_servo: {to: gateway.device_gateway.actuator_servo}
+          component.manipulation.actuator_servo: {to: gateway.device_gateway.actuator_servo}
+  - name: deployment_multiple_non_control_requirements_to_one_interface
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: accept
+    files:
+      client.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.client, role: component}
+        requires:
+          scan_query: {contract: api.perception.query.v1}
+          nearest_query: {contract: api.perception.query.v1}
+      provider.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.perception, role: component}
+        provides:
+          query: {contract: api.perception.query.v1}
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        subsystems:
+          component.client: {manifest: ./client.subsystem.yaml}
+          component.perception: {manifest: ./provider.subsystem.yaml}
+        bindings:
+          component.client.scan_query: {to: component.perception.query}
+          component.client.nearest_query: {to: component.perception.query}
+  - name: deployment_instances_with_shared_package_manifest
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: accept
+    files:
+      manipulator_servo/package.yaml: |
+        schema_version: 1
+        name: demo.manipulator_servo_prototype
+        entrypoint:
+          command: bin/run
+      manipulator_servo/subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: demo.manipulator_servo_prototype, role: component}
+        spatial:
+          participation: required
+          ports:
+            base: {direction: import, semantic: manipulator_mount, frame: arm_base}
+            tool: {direction: export, semantic: tool_center_point, frame: tool}
+        requires:
+          actuator_servo_gateway: {contract: api.actuator.servo.v1}
+        provides:
+          manipulator: {contract: component.manipulator.v1}
+      gateway.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: demo.isaac_sim_gateway, role: gateway}
+        provides:
+          actuator_servo_gateway: {contract: api.actuator.servo.v1}
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        subsystems:
+          demo.isaac_sim_gateway: {manifest: ./gateway.subsystem.yaml}
+        instances:
+          demo.left_manipulator:
+            package: ./manipulator_servo
+            params: {controller.robot_id: left_ps_ca}
+          demo.right_manipulator:
+            package: ./manipulator_servo
+            params: {controller.robot_id: right_ps_ca}
+        bindings:
+          demo.left_manipulator.actuator_servo_gateway: {to: demo.isaac_sim_gateway.actuator_servo_gateway}
+          demo.right_manipulator.actuator_servo_gateway: {to: demo.isaac_sim_gateway.actuator_servo_gateway}
+  - name: deployment_instance_duplicates_subsystem
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Deployment instance duplicates subsystem name: server"
+    files:
+      server.subsystem.yaml: *procedure_server
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        subsystems:
+          server: ./server.subsystem.yaml
+        instances:
+          server: {manifest: ./server.subsystem.yaml}
+  - name: deployment_instance_deprecated_slot
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Deployment instance server.left uses deprecated `slot`; use `slots` mapping"
+    files:
+      server.subsystem.yaml: *procedure_server
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        instances:
+          server.left: {manifest: ./server.subsystem.yaml, slot: left}
+  - name: deployment_instance_unsupported_launch
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Deployment instance server.left has unsupported launch mode 'daemon'; expected one of managed, external, federated"
+    files:
+      server.subsystem.yaml: *procedure_server
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        instances:
+          server.left: {manifest: ./server.subsystem.yaml, launch: daemon}
+  - name: deployment_instance_without_manifest
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Deployment instance server.left must define manifest or package"
+    files:
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        instances:
+          server.left: {launch: external}
+
+  # Spatial topology ---------------------------------------------------------
+  - name: deployment_spatial_import_references_bound_export
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: accept
+    files:
+      localizer.subsystem.yaml: *localizer
+      frame_consumer.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: frame_consumer, role: component}
+        spatial:
+          participation: required
+          ports:
+            map: {direction: import, semantic: map_reference, source: {requirement: localization, port: map}}
+            body: {direction: import, semantic: localized_body, source: {requirement: localization, port: body}}
+        requires:
+          localization: {contract: tutorial.localization.v1, visibility: internal}
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        subsystems:
+          localizer: {manifest: ./localizer.subsystem.yaml}
+          frame_consumer: {manifest: ./frame_consumer.subsystem.yaml}
+        bindings:
+          frame_consumer.localization: {to: localizer.localization}
+  - name: deployment_spatial_source_undeclared_port
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Spatial reference frame_consumer.localization.odom targets localizer, which does not declare that port"
+    files:
+      localizer.subsystem.yaml: *localizer
+      frame_consumer.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: frame_consumer, role: component}
+        spatial:
+          participation: required
+          ports:
+            odom: {direction: import, semantic: odometry, source: {requirement: localization, port: odom}}
+        requires:
+          localization: {contract: tutorial.localization.v1, visibility: internal}
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        subsystems:
+          localizer: ./localizer.subsystem.yaml
+          frame_consumer: ./frame_consumer.subsystem.yaml
+        bindings:
+          frame_consumer.localization: localizer.localization
+  - name: deployment_spatial_export_sources_import
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Spatial port frame_consumer.sensor cannot source import port localization.sensor as export"
+    files:
+      localizer.subsystem.yaml: *localizer
+      frame_consumer.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: frame_consumer, role: component}
+        spatial:
+          participation: required
+          ports:
+            sensor: {direction: export, semantic: observation_frame, source: {requirement: localization, port: sensor}}
+        requires:
+          localization: {contract: tutorial.localization.v1, visibility: internal}
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        subsystems:
+          localizer: ./localizer.subsystem.yaml
+          frame_consumer: ./frame_consumer.subsystem.yaml
+        bindings:
+          frame_consumer.localization: localizer.localization
+  - name: deployment_spatial_mount_parent_import
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Spatial mount frame_consumer.sensor_mount parent must reference an export port"
+    files:
+      localizer.subsystem.yaml: *localizer
+      frame_consumer.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: frame_consumer, role: component}
+        spatial:
+          participation: required
+          mounts:
+            - name: sensor_mount
+              parent: {requirement: localization, port: sensor}
+              child: {requirement: localization, port: sensor}
+        requires:
+          localization: {contract: tutorial.localization.v1, visibility: internal}
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        subsystems:
+          localizer: ./localizer.subsystem.yaml
+          frame_consumer: ./frame_consumer.subsystem.yaml
+        bindings:
+          frame_consumer.localization: localizer.localization
+  - name: deployment_spatial_mount
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: accept
+    files:
+      localizer.subsystem.yaml: *localizer
+      frame_consumer.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: frame_consumer, role: component}
+        spatial:
+          participation: required
+          mounts:
+            - name: sensor_mount
+              parent: {requirement: localization, port: body}
+              child: {requirement: localization, port: sensor}
+              transform: {translation: [0.1, 0.0, 0.3], rotation_xyzw: [0.0, 0.0, 0.0, 1.0]}
+        requires:
+          localization: {contract: tutorial.localization.v1, visibility: internal}
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        subsystems:
+          localizer: ./localizer.subsystem.yaml
+          frame_consumer: ./frame_consumer.subsystem.yaml
+        bindings:
+          frame_consumer.localization: localizer.localization
+
+  # Robot platform and application -------------------------------------------
+  - name: deployment_robot_application_composition
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: accept
+    files:
+      r2kernel.robot.yaml: *cleaner_robot
+      subsystem.yaml: *pick_place_app
+      component.subsystem.yaml: *perception_component
+      gateway.subsystem.yaml: *arm_gateway
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        robot: ./r2kernel.robot.yaml
+        application: ./subsystem.yaml
+        instances:
+          app.pick_place: {manifest: ./subsystem.yaml, launch: external}
+          component.perception:
+            manifest: ./component.subsystem.yaml
+            slots: {perception_component: object_detection}
+            launch: managed
+          gateway.arm:
+            manifest: ./gateway.subsystem.yaml
+            slots: {digital_gateway: digital}
+            launch: managed
+        bindings:
+          app.pick_place.objects: {to: component.perception.object_detection}
+  - name: deployment_application_without_robot
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "declares an application but no robot manifest"
+    files:
+      subsystem.yaml: *pick_place_app
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        application: ./subsystem.yaml
+        instances:
+          app.pick_place: {manifest: ./subsystem.yaml, launch: external}
+  - name: deployment_application_subsystem_not_included
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "declares application 'app.pick_place' but does not include its application subsystem manifest"
+    files:
+      r2kernel.robot.yaml: *empty_robot
+      subsystem.yaml: *pick_place_app
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        robot: ./r2kernel.robot.yaml
+        application: ./subsystem.yaml
+  - name: deployment_application_robot_profile_mismatch
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Application app.pick_place requires robot profile(s) tutorial.robot_cleaner.cleaner_2d.v1, but robot base_platform does not provide them"
+    files:
+      r2kernel.robot.yaml: |
+        kind: r2kernel.robot
+        version: 1
+        robot:
+          name: base_platform
+          profiles: [r2kernel.robot.mobile_base.v1]
+        slots: {}
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: app.pick_place, role: app}
+        application:
+          requires_robot:
+            profiles: [tutorial.robot_cleaner.cleaner_2d.v1]
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        robot: ./r2kernel.robot.yaml
+        application: ./subsystem.yaml
+        instances:
+          app.pick_place: {manifest: ./subsystem.yaml, launch: external}
+        bindings: {}
+  - name: deployment_slot_contract_mismatch
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Deployment instance robot.provider slot 'controller' requires contract api.locomotion.velocity.v1, but interface 'servo' provides api.actuator.servo.v1"
+    files:
+      r2kernel.robot.yaml: |
+        kind: r2kernel.robot
+        version: 1
+        robot: {name: platform}
+        slots:
+          controller: {role: component, contract: api.locomotion.velocity.v1}
+      provider.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: robot.provider, role: component}
+        provides:
+          servo: {contract: api.actuator.servo.v1}
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        robot: ./r2kernel.robot.yaml
+        instances:
+          robot.provider:
+            manifest: ./provider.subsystem.yaml
+            slots: {controller: servo}
+        bindings: {}
+  - name: deployment_managed_robot_component_without_slot
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Deployment instance robot.gateway is a managed robot subsystem but is not assigned to any robot slot"
+    files:
+      r2kernel.robot.yaml: *empty_robot
+      gateway.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: robot.gateway, role: gateway}
+        provides:
+          arm: {contract: api.actuator.servo.v1}
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        robot: ./r2kernel.robot.yaml
+        instances:
+          robot.gateway: {manifest: ./gateway.subsystem.yaml, launch: managed}
+        bindings: {}
+  - name: deployment_managed_compound_without_slot
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: accept
+    files:
+      r2kernel.robot.yaml: *empty_robot
+      compound.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: compound.platform, role: compound}
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        robot: ./r2kernel.robot.yaml
+        instances:
+          compound.platform: {manifest: ./compound.subsystem.yaml, launch: managed}
+        bindings: {}
+  - name: deployment_slots_without_robot
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Deployment instances with `slots` require a robot manifest: gateway.arm"
+    files:
+      gateway.subsystem.yaml: *arm_gateway
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        instances:
+          gateway.arm:
+            manifest: ./gateway.subsystem.yaml
+            slots: {digital_gateway: digital}
+  - name: deployment_unknown_robot_slot
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Deployment instance gateway.arm references unknown robot slot 'wheels'"
+    files:
+      r2kernel.robot.yaml: *cleaner_robot
+      gateway.subsystem.yaml: *arm_gateway
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        robot: ./r2kernel.robot.yaml
+        instances:
+          gateway.arm:
+            manifest: ./gateway.subsystem.yaml
+            slots: {wheels: digital}
+  - name: deployment_slot_role_mismatch
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Deployment instance component.perception role 'component' does not match robot slot digital_gateway role 'gateway'"
+    files:
+      r2kernel.robot.yaml: *cleaner_robot
+      component.subsystem.yaml: *perception_component
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        robot: ./r2kernel.robot.yaml
+        instances:
+          component.perception:
+            manifest: ./component.subsystem.yaml
+            slots: {digital_gateway: object_detection}
+  - name: deployment_slot_missing_interface
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Deployment instance gateway.arm slot 'digital_gateway' references missing provided interface 'arm'"
+    files:
+      r2kernel.robot.yaml: *cleaner_robot
+      gateway.subsystem.yaml: *arm_gateway
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        robot: ./r2kernel.robot.yaml
+        instances:
+          gateway.arm:
+            manifest: ./gateway.subsystem.yaml
+            slots: {digital_gateway: arm}
+  - name: deployment_slot_internal_interface
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Deployment instance gateway.bus slot 'bus_gateway' uses interface 'bus' with visibility internal; robot slots require public interfaces"
+    files:
+      r2kernel.robot.yaml: |
+        kind: r2kernel.robot
+        version: 1
+        robot: {name: platform}
+        slots:
+          bus_gateway: {role: gateway}
+      gateway.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: gateway.bus, role: gateway}
+        provides:
+          bus:
+            contract: vendor.bus.v1
+            visibility: internal
+            endpoints: {controls: [bus_command]}
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        robot: ./r2kernel.robot.yaml
+        instances:
+          gateway.bus:
+            manifest: ./gateway.subsystem.yaml
+            slots: {bus_gateway: bus}
+  - name: deployment_slot_assigned_twice
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Robot slot 'digital_gateway' is assigned more than once"
+    files:
+      r2kernel.robot.yaml: *cleaner_robot
+      gateway.subsystem.yaml: *arm_gateway
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        robot: ./r2kernel.robot.yaml
+        instances:
+          gateway.left:
+            manifest: ./gateway.subsystem.yaml
+            slots: {digital_gateway: digital}
+          gateway.right:
+            manifest: ./gateway.subsystem.yaml
+            slots: {digital_gateway: digital}
+  - name: deployment_missing_required_robot_slot
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Deployment is missing required robot slot instance(s): digital_gateway"
+    files:
+      r2kernel.robot.yaml: *cleaner_robot
+      component.subsystem.yaml: *perception_component
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        robot: ./r2kernel.robot.yaml
+        instances:
+          component.perception:
+            manifest: ./component.subsystem.yaml
+            slots: {perception_component: object_detection}
+  - name: deployment_app_fills_robot_slot
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Deployment instance app.pick_place is an app and cannot fill robot slots"
+    files:
+      r2kernel.robot.yaml: *empty_robot
+      subsystem.yaml: *pick_place_app
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        robot: ./r2kernel.robot.yaml
+        instances:
+          app.pick_place:
+            manifest: ./subsystem.yaml
+            slots: {ui: objects}
+  - name: deployment_robot_manifest_not_found
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Robot manifest file not found"
+    files:
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        robot: ./missing.robot.yaml

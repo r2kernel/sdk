@@ -1,0 +1,44 @@
+version: 1
+id: api.actuator.drive.v1
+kind: api_contract
+name: Drive Gateway API Contract
+description: Deterministic low-level drive command and state exchange.
+controls:
+- topic: drive_command
+  request: msg.actuator.drive.v1/DriveCommand
+  response: msg.actuator.drive.v1/DriveState
+  timing_support: required
+  semantics:
+    periodic: contract_defined
+    validity: runtime_envelope
+    scheduling: provider_dispatch
+    late_behavior: reject_expired
+frames:
+  policy: endpoint_declared
+  dynamic_frames: owning_message_only
+timing:
+  clock_domain: r2kernel_sync
+  event_envelope:
+    observed: observed_at_sync_ns
+    published: published_at_sync_ns
+    received: received_at_sync_ns
+  control_envelope:
+    generated: generated_at_sync_ns
+    sent: sent_at_sync_ns
+    execute: execute_at_sync_ns
+    valid_until: valid_until_sync_ns
+state_model:
+  owner: provider
+  lifecycle: runtime_managed
+failure_semantics:
+  transport: runtime_status
+  domain: endpoint_response
+authority:
+  owner: provider
+  command_arbitration: exclusive_required_binding
+limits:
+  source: provider
+  enforcement: provider
+conformance:
+  level: public
+  payload_time: runtime_envelope

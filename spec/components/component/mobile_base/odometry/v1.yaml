@@ -1,0 +1,19 @@
+version: 1
+id: component.mobile_base.odometry.v1
+kind: component
+name: Odometry Mobile Base Controller
+description: Wheeled mobile-base controller with a required odometry surface.
+conformance_apis:
+  - api.locomotion.velocity.v1
+  - api.locomotion.velocity_reference.v1
+  - api.locomotion.mobile_base.state.v1
+  - api.locomotion.odometry.v1
+spatial:
+  participation: required
+  ports:
+    reference:
+      direction: export
+      semantic: odometry_reference
+    body:
+      direction: export
+      semantic: mobile_body

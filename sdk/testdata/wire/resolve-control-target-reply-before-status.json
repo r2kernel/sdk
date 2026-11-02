@@ -1,0 +1,57 @@
+{
+  "description": "resolve_control_target reply before the provider's first status: codec_context_available is null",
+  "message": {
+    "codec_context_available": null,
+    "codec_metadata": {},
+    "contract_codecs": {},
+    "control_contracts": {},
+    "control_port": 0,
+    "control_relay_enabled": false,
+    "controls": [],
+    "host": "127.0.0.1",
+    "last_seen": 1793463571.830149,
+    "operation_contracts": {},
+    "operations": [],
+    "peer_id": null,
+    "procedure_contracts": {},
+    "procedures": [],
+    "registration_revision": "52b997df75b5594829be81dcf993e6c5",
+    "res": "ok",
+    "route_kind": "local_control",
+    "session_id": "session-wire-1",
+    "subsystem": "component.wire_fixture"
+  },
+  "producer": "control backend udp.rs handle_message RESOLVE_CONTROL_TARGET -> state/control_requests.rs resolve_control_target",
+  "readers": [
+    "python: r2kernel/core/r2kernel_client.py R2KernelClient.resolve_control_target, core/_runtime_control.py",
+    "cpp: src/core/control_requests.cpp parse_control_route, src/core/client.cpp validate_prepared_control_peer",
+    "rust bench client: src/control.rs ControlClient::resolve_control_target"
+  ],
+  "types": {
+    "codec_context_available": "null",
+    "codec_metadata": "object",
+    "contract_codecs": "object",
+    "control_contracts": "object",
+    "control_port": "integer",
+    "control_relay_enabled": "boolean",
+    "controls": "array",
+    "host": "string",
+    "last_seen": "number",
+    "operation_contracts": "object",
+    "operations": "array",
+    "peer_id": "null",
+    "procedure_contracts": "object",
+    "procedures": "array",
+    "registration_revision": "string",
+    "res": "string",
+    "route_kind": "string",
+    "session_id": "string",
+    "subsystem": "string"
+  },
+  "volatile": [
+    "registration_revision",
+    "last_seen",
+    "host"
+  ],
+  "wire": "{\"codec_context_available\":null,\"codec_metadata\":{},\"contract_codecs\":{},\"control_contracts\":{},\"control_port\":0,\"control_relay_enabled\":false,\"controls\":[],\"host\":\"127.0.0.1\",\"last_seen\":1793463571.830149,\"operation_contracts\":{},\"operations\":[],\"peer_id\":null,\"procedure_contracts\":{},\"procedures\":[],\"registration_revision\":\"52b997df75b5594829be81dcf993e6c5\",\"res\":\"ok\",\"route_kind\":\"local_control\",\"session_id\":\"session-wire-1\",\"subsystem\":\"component.wire_fixture\"}"
+}

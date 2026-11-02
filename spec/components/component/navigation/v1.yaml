@@ -1,0 +1,9 @@
+version: 1
+id: component.navigation.v1
+kind: component
+name: Goal Navigation Component
+description: Goal and path navigation component independent of localization, planning, and mobile-base implementation.
+conformance_apis:
+  - api.navigation.v1
+spatial:
+  participation: none

@@ -1,0 +1,167 @@
+version: 1
+id: msg.motion.manipulator.v1
+kind: message_set
+description: Canonical manipulator motion payloads built on shared articulated, spatial, and kinematic foundations.
+imports:
+  msg.core.kinematics: v1
+  msg.core.spatial: v1
+messages:
+  TCP:
+    description: Tool center point definition.
+    fields:
+      - name: pose
+        type: msg.core.spatial/Pose
+  Payload:
+    description: Tool payload definition.
+    fields:
+      - name: mass
+        type: float32
+      - name: center_of_mass
+        type: msg.core.spatial/Position
+      - name: inertia
+        type: msg.core.spatial/Inertia
+  TaskWayPoint:
+    description: Cartesian waypoint and motion tuning values for tool- or TCP-oriented manipulation.
+    fields:
+      - name: pose
+        type: msg.core.spatial/Pose
+      - name: radius
+        type: float32
+      - name: vel
+        type: float32
+      - name: cornering_vel
+        type: float32
+      - name: acc
+        type: float32
+  ToolSettings:
+    description: Combined payload and TCP tool definition.
+    fields:
+      - name: payload
+        type: Payload
+      - name: tcp
+        type: TCP
+  MotionFeedback:
+    description: Generic feedback state for long-running manipulator motion.
+    fields:
+      - name: state
+        type: string
+      - name: progress
+        type: float32
+        optional: true
+  MotionState:
+    description: Current manipulator motion state for state publication and action state reporting.
+    fields:
+      - name: value
+        type: string
+      - name: progress
+        type: float32
+        optional: true
+  MotionResult:
+    description: Generic result body for manipulator motion completion.
+    fields:
+      - name: completed
+        type: bool
+      - name: detail
+        type: string
+        optional: true
+  InverseKinematicsResult:
+    description: Result body for inverse-kinematics queries.
+    fields:
+      - name: valid
+        type: bool
+      - name: joints
+        type: msg.core.kinematics/JointValues
+      - name: detail
+        type: string
+        optional: true
+  MoveLRequest:
+    description: Linear Cartesian programmed-motion request.
+    fields:
+      - name: waypoints
+        type: vector<TaskWayPoint>
+      - name: finish_mode
+        type: string
+        optional: true
+  MoveCRequest:
+    description: Circular Cartesian programmed-motion request.
+    fields:
+      - name: via_point
+        type: TaskWayPoint
+      - name: target_point
+        type: TaskWayPoint
+      - name: finish_mode
+        type: string
+        optional: true
+  SetTcpRequest:
+    description: Tool center point update request.
+    fields:
+      - name: tcp
+        type: TCP
+  SetPayloadRequest:
+    description: Tool payload update request.
+    fields:
+      - name: payload
+        type: Payload
+      - name: transition_time_ns
+        type: int64
+        optional: true
+  CartesianOffset:
+    description: Cartesian offset applied to active manipulator motion.
+    fields:
+      - name: frame_id
+        type: string
+      - name: offset
+        type: msg.core.spatial/Pose
+  WrenchCommand:
+    description: Cartesian wrench target expressed in the declared frame.
+    fields:
+      - name: frame_id
+        type: string
+      - name: wrench
+        type: msg.core.spatial/Wrench
+  ToolCalibrationRequest:
+    description: Request provider-owned TCP or payload calibration.
+    fields:
+      - name: mode
+        type: string
+      - name: samples
+        type: uint32
+        optional: true
+  ToolCalibrationResult:
+    fields:
+      - name: valid
+        type: bool
+      - name: settings
+        type: ToolSettings
+        optional: true
+      - name: detail
+        type: string
+        optional: true
+  ForwardKinematicsRequest:
+    fields:
+      - name: joints
+        type: msg.core.kinematics/JointValues
+  ForwardKinematicsResult:
+    fields:
+      - name: valid
+        type: bool
+      - name: pose
+        type: msg.core.spatial/Pose
+      - name: frame_id
+        type: string
+  InverseKinematicsRequest:
+    fields:
+      - name: target_pose
+        type: msg.core.spatial/Pose
+      - name: frame_id
+        type: string
+      - name: seed
+        type: msg.core.kinematics/JointValues
+        optional: true
+  HandGuidingState:
+    fields:
+      - name: enabled
+        type: bool
+      - name: mode
+        type: string
+        optional: true

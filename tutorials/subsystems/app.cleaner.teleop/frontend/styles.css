@@ -1,0 +1,280 @@
+:root {
+  color-scheme: dark;
+  --bg: #080607;
+  --ink: #f8f2f2;
+  --text: #d8d1d1;
+  --muted: #a79b9e;
+  --accent: #a31d36;
+  --accent-strong: #f35a46;
+  --warm: #ffd8a0;
+  --line: rgba(243, 90, 70, 0.22);
+  --line-strong: rgba(243, 90, 70, 0.46);
+  --panel: rgba(15, 8, 10, 0.88);
+  --field: rgba(10, 6, 8, 0.96);
+  --green: #39d99d;
+  --red: #f06464;
+  --amber: #ffd08a;
+  font-family: "Noto Serif", Georgia, "Times New Roman", serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(163, 29, 54, 0.24), transparent 34%),
+    linear-gradient(180deg, #050304 0%, #0b0608 48%, #080607 100%);
+  color: var(--text);
+}
+
+button {
+  width: 100%;
+  min-height: 44px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: linear-gradient(180deg, rgba(23, 10, 14, 0.96), rgba(11, 7, 9, 0.9));
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+button:hover {
+  border-color: var(--line-strong);
+  color: var(--warm);
+}
+
+button:active,
+button.teleop-held {
+  border-color: rgba(255, 216, 160, 0.42);
+  background: linear-gradient(180deg, rgba(163, 29, 54, 0.96), rgba(92, 13, 29, 0.96));
+  color: #fff4f2;
+}
+
+.teleop-shell {
+  width: min(1120px, 100%);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: clamp(12px, 2vw, 22px);
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-areas:
+    "header header header header header header header header header header header header"
+    "drive drive drive drive manip manip manip manip manip manip manip manip"
+    "action action action action log log log log log log log log";
+  gap: clamp(10px, 1.6vw, 16px);
+}
+
+.teleop-header,
+.panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28);
+}
+
+.teleop-header {
+  grid-area: header;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+  padding: clamp(14px, 1.8vw, 18px);
+}
+
+.drive-panel {
+  grid-area: drive;
+}
+
+.manipulator-panel {
+  grid-area: manip;
+}
+
+.action-panel {
+  grid-area: action;
+}
+
+.log-panel {
+  grid-area: log;
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+h1,
+h2 {
+  margin: 0;
+  color: var(--ink);
+  letter-spacing: 0;
+}
+
+h1 {
+  font-size: clamp(23px, 3.2vw, 32px);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
+}
+
+h2 {
+  margin-bottom: 12px;
+  font-size: clamp(14px, 1.8vw, 15px);
+}
+
+.panel {
+  min-width: 0;
+  padding: clamp(12px, 1.8vw, 16px);
+}
+
+.status-pill {
+  flex: 0 0 auto;
+  min-width: 104px;
+  padding: 7px 12px;
+  border: 1px solid rgba(57, 217, 157, 0.28);
+  border-radius: 999px;
+  color: var(--green);
+  background: rgba(57, 217, 157, 0.08);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.status-pill[data-state="error"] {
+  border-color: rgba(240, 100, 100, 0.34);
+  color: var(--red);
+  background: rgba(240, 100, 100, 0.08);
+}
+
+.dpad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: clamp(7px, 1.4vw, 10px);
+}
+
+.button-grid {
+  display: grid;
+  gap: clamp(7px, 1.4vw, 10px);
+}
+
+.button-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.button-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.action-card {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(7px, 1.4vw, 10px);
+}
+
+.action-card > div,
+.action-step {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--field);
+  padding: 10px;
+}
+
+.action-card span,
+.action-step span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.action-card strong,
+.action-step strong {
+  display: block;
+  color: var(--ink);
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+
+.action-steps {
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.action-step[data-state="failed"],
+.action-step[data-state="blocked"] {
+  border-color: rgba(240, 100, 100, 0.62);
+}
+
+.action-step[data-state="running"] {
+  border-color: rgba(255, 208, 138, 0.62);
+}
+
+.log-panel pre {
+  min-height: clamp(118px, 22vh, 180px);
+  max-height: min(42vh, 320px);
+  margin: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  background: var(--field);
+  color: var(--text);
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@media (max-width: 900px) {
+  .teleop-shell {
+    width: min(760px, 100%);
+    grid-template-areas:
+      "header header header header header header header header header header header header"
+      "drive drive drive drive drive drive manip manip manip manip manip manip"
+      "action action action action action action log log log log log log";
+  }
+}
+
+@media (max-width: 640px) {
+  .teleop-shell {
+    grid-template-areas:
+      "header header header header header header header header header header header header"
+      "drive drive drive drive drive drive drive drive drive drive drive drive"
+      "manip manip manip manip manip manip manip manip manip manip manip manip"
+      "action action action action action action action action action action action action"
+      "log log log log log log log log log log log log";
+  }
+
+  .teleop-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .status-pill {
+    width: 100%;
+  }
+}
+
+@media (max-width: 320px) {
+  .button-grid.two,
+  .action-card {
+    grid-template-columns: 1fr;
+  }
+
+  .button-grid .wide {
+    grid-column: auto;
+  }
+
+  button {
+    min-height: 40px;
+    padding: 8px 9px;
+  }
+}

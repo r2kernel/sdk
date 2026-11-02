@@ -1,0 +1,49 @@
+version: 1
+id: api.mapping.v1
+kind: api_contract
+name: Mapping API Contract
+description: Canonical mapping API contract.
+events:
+- topic: occupancy_map
+  type: msg.mapping.v1/OccupancyGridMap
+  direction: publish
+  semantics:
+    observation: provider_sample
+    delivery: best_effort_latest
+    fanout: allowed
+- topic: map_state
+  type: msg.mapping.v1/MapStatus
+  direction: publish
+  semantics:
+    observation: provider_sample
+    delivery: best_effort_latest
+    fanout: allowed
+frames:
+  policy: endpoint_declared
+  dynamic_frames: owning_message_only
+timing:
+  clock_domain: r2kernel_sync
+  event_envelope:
+    observed: observed_at_sync_ns
+    published: published_at_sync_ns
+    received: received_at_sync_ns
+  control_envelope:
+    generated: generated_at_sync_ns
+    sent: sent_at_sync_ns
+    execute: execute_at_sync_ns
+    valid_until: valid_until_sync_ns
+state_model:
+  owner: provider
+  lifecycle: runtime_managed
+failure_semantics:
+  transport: runtime_status
+  domain: endpoint_response
+authority:
+  owner: provider
+  command_arbitration: exclusive_required_binding
+limits:
+  source: provider
+  enforcement: provider
+conformance:
+  level: public
+  payload_time: runtime_envelope

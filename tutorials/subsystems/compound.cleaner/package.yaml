@@ -1,0 +1,29 @@
+schema_version: 1
+name: tutorial.robot_cleaner.cleaner_compound
+description: Robot cleaner compound subsystem package.
+entrypoint:
+  command: run.py
+  args:
+    - --name
+    - "{{params.subsystem.name}}"
+    - --manifest
+    - subsystem.yaml
+    - --deployment-manifest
+    - "{{params.deployment.manifest}}"
+    - --log-level
+    - "{{params.log.level}}"
+parameters:
+  subsystem.name:
+    type: string
+    default: "{{instance.id}}"
+  deployment.manifest:
+    type: string
+    default: ""
+  log.level:
+    type: string
+    default: INFO
+resources:
+  network:
+    interfaces: []
+  devices:
+    paths: []

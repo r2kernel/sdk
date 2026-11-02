@@ -1,0 +1,91 @@
+version: 1
+id: msg.sensor.depth.v1
+kind: message_set
+description: Typed depth sample formats and transfer parts preserving measurement meaning.
+imports:
+  msg.control: v1
+  msg.stream: v1
+messages:
+  DepthCycleRequest:
+    description: Requests a prepared depth sample for a sample-exchange cycle.
+    fields:
+    - name: cycle
+      type: msg.control/ControlCycle
+    - name: after_sample_id
+      type: int64
+      optional: true
+    - name: after_unit_sequence
+      type: int64
+      optional: true
+    - name: resync_required
+      type: bool
+      optional: true
+  DepthCycleResponse:
+    description: One prepared depth transfer part or a normal no-new-sample result.
+    fields:
+    - name: cycle
+      type: msg.control/ControlCycle
+    - name: status
+      type: string
+      description: sample_available, no_new_sample, resync_required, unsupported_format, or device_error.
+    - name: part
+      type: DepthTransferPart
+      optional: true
+    - name: detail
+      type: string
+      optional: true
+  DepthStreamFormat:
+    description: >-
+      Immutable depth plane layout and measurement scale for one format revision.
+      element_type is uint16, uint32, or float32; invalid-value and loss rules are explicit.
+    fields:
+    - name: width
+      type: uint32
+    - name: height
+      type: uint32
+    - name: element_type
+      type: string
+    - name: endianness
+      type: string
+      description: little or big byte order for multibyte depth samples.
+    - name: row_stride_bytes
+      type: uint32
+    - name: meters_per_unit
+      type: float64
+    - name: invalid_value_rule
+      type: string
+      description: Explicit sentinel, mask, NaN, or other invalid-pixel rule.
+    - name: frame_id
+      type: string
+    - name: calibration_revision
+      type: int64
+    - name: loss_policy
+      type: string
+      description: lossless or bounded_error.
+    - name: maximum_absolute_error_m
+      type: float32
+      optional: true
+    - name: codec
+      type: msg.stream/CodecDescriptor
+      optional: true
+    - name: limits
+      type: msg.stream/StreamLimits
+  DepthSample:
+    description: Complete reassembled depth measurement plane.
+    fields:
+    - name: header
+      type: msg.stream/TransferPartHeader
+    - name: format
+      type: DepthStreamFormat
+    - name: payload_bytes
+      type: bytes
+  DepthTransferPart:
+    description: Typed depth sample identity, format revision, and one bounded payload chunk.
+    fields:
+    - name: header
+      type: msg.stream/TransferPartHeader
+    - name: chunk
+      type: msg.stream/EncodedChunk
+    - name: format
+      type: DepthStreamFormat
+      optional: true

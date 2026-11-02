@@ -1,0 +1,101 @@
+version: 1
+id: msg.core.common.primitive.v1
+kind: message_set
+description: Canonical common wrapper and utility message set for primitive payloads and empty bodies.
+messages:
+  Empty:
+    description: Explicit empty payload used instead of raw null or omitted bodies.
+    fields: []
+  BoolValue:
+    description: Canonical wrapped boolean payload.
+    fields:
+      - name: value
+        type: bool
+  Int32Value:
+    description: Canonical wrapped int32 payload.
+    fields:
+      - name: value
+        type: int32
+  UInt32Value:
+    description: Canonical wrapped uint32 payload.
+    fields:
+      - name: value
+        type: uint32
+  UInt32Vector:
+    description: Canonical wrapped uint32 vector payload.
+    fields:
+      - name: values
+        type: vector<uint32>
+  Int64Value:
+    description: Canonical wrapped int64 payload.
+    fields:
+      - name: value
+        type: int64
+  Float32Value:
+    description: Canonical wrapped float32 payload.
+    fields:
+      - name: value
+        type: float32
+  Float32Vector:
+    description: Canonical wrapped float32 vector payload.
+    fields:
+      - name: values
+        type: vector<float32>
+  Float64Value:
+    description: Canonical wrapped float64 payload.
+    fields:
+      - name: value
+        type: float64
+  BoolVector:
+    description: Canonical wrapped boolean vector payload.
+    fields:
+      - name: values
+        type: vector<bool>
+  StringValue:
+    description: Canonical wrapped string payload.
+    fields:
+      - name: value
+        type: string
+  BytesValue:
+    description: Canonical wrapped bytes payload.
+    fields:
+      - name: value
+        type: bytes
+  TimestampNs:
+    description: Nanosecond timestamp wrapper used when a named scalar time payload is needed.
+    fields:
+      - name: value
+        type: int64
+  DurationNs:
+    description: Nanosecond duration wrapper used when a named scalar duration payload is needed.
+    fields:
+      - name: value
+        type: int64
+  IndexedBoolValue:
+    description: Generic indexed boolean payload used by channel-addressed interfaces such as digital IO.
+    fields:
+      - name: index
+        type: uint32
+      - name: value
+        type: bool
+  IndexedFloat32Value:
+    description: Generic indexed float32 payload used by channel-addressed interfaces such as analog IO.
+    fields:
+      - name: index
+        type: uint32
+      - name: value
+        type: float32
+  IndexedBoolVector:
+    description: Generic indexed boolean vector payload for batched channel-addressed updates.
+    fields:
+      - name: indices
+        type: vector<uint32>
+      - name: values
+        type: vector<bool>
+  IndexedFloat32Vector:
+    description: Generic indexed float32 vector payload for batched channel-addressed updates.
+    fields:
+      - name: indices
+        type: vector<uint32>
+      - name: values
+        type: vector<float32>

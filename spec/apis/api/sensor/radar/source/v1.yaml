@@ -1,0 +1,64 @@
+version: 1
+id: api.sensor.radar.source.v1
+kind: api_contract
+name: Radar Source Control API v1
+description: Control-only polling contract for prepared sectors from an integrated 360-degree rotating radar; no external motor is required.
+controls:
+- topic: radar_cycle
+  request: msg.sensor.radar.v1/RadarCycleRequest
+  response: msg.sensor.radar.v1/RadarCycleResponse
+  timing_support: required
+  semantics:
+    periodic: required
+    validity: runtime_envelope
+    scheduling: provider_dispatch
+    late_behavior: reject_expired
+    common_control:
+      version: 1
+      request_effect: read_prepared_radar_sector
+      response_scope: sample_observed
+      period_policy: binding_required
+      execution_policy: finite_expiry_commit_check
+      refresh_mode: sample_exchange
+      ownership_policy: explicit_binding_generation
+      ordering: strictly_increasing_cycle
+      repeat_policy: no_automatic_replay
+      failure: report_domain_status
+      limits:
+        source: binding
+        required_fields:
+        - max_update_gap_ns
+        - max_command_age_ns
+        - max_request_bytes
+        - max_response_bytes
+        - max_pending_units
+        provider_bounds: constrain_selected_values
+frames:
+  policy: endpoint_declared
+  dynamic_frames: owning_message_only
+timing:
+  clock_domain: r2kernel_sync
+  event_envelope:
+    observed: observed_at_sync_ns
+    published: published_at_sync_ns
+    received: received_at_sync_ns
+  control_envelope:
+    generated: generated_at_sync_ns
+    sent: sent_at_sync_ns
+    execute: execute_at_sync_ns
+    valid_until: valid_until_sync_ns
+state_model:
+  owner: provider
+  lifecycle: runtime_managed
+failure_semantics:
+  transport: runtime_status
+  domain: endpoint_response
+authority:
+  owner: provider
+  command_arbitration: exclusive_required_binding
+limits:
+  source: binding
+  enforcement: provider
+conformance:
+  level: public
+  payload_time: runtime_envelope_and_radar_sector_interval

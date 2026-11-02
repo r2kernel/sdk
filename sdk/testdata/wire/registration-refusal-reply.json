@@ -1,0 +1,21 @@
+{
+  "description": "a registration refusal that asks for a retry carries its reason code",
+  "message": {
+    "error": "subsystem registration refused: replacing the expired registration of this name waits for other Event resource operations, which did not finish within the registration reply budget; retry the registration",
+    "reason": "registration_gate_busy",
+    "status": "error"
+  },
+  "producer": "control backend udp.rs response_to_effect (BackendState::registration_refusal_reason)",
+  "readers": [
+    "python: core/_event_registration.py (reason)",
+    "cpp: src/core/client_control_registration.hpp",
+    "rust bench client: src/control.rs register_subsystem (reason)"
+  ],
+  "types": {
+    "error": "string",
+    "reason": "string",
+    "status": "string"
+  },
+  "volatile": [],
+  "wire": "{\"error\":\"subsystem registration refused: replacing the expired registration of this name waits for other Event resource operations, which did not finish within the registration reply budget; retry the registration\",\"reason\":\"registration_gate_busy\",\"status\":\"error\"}"
+}

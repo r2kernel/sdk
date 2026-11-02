@@ -1,0 +1,19 @@
+{
+  "description": "update_subsystem_status (heartbeat/codec status) acknowledgement",
+  "message": {
+    "ok": true,
+    "res": "ok"
+  },
+  "producer": "control backend udp.rs handle_message UPDATE_SUBSYSTEM_STATUS",
+  "readers": [
+    "python: core/_control_registration.py status_refusal",
+    "cpp: src/core/client.cpp publish_prepared_status",
+    "rust bench client: src/control.rs send_status"
+  ],
+  "types": {
+    "ok": "boolean",
+    "res": "string"
+  },
+  "volatile": [],
+  "wire": "{\"ok\":true,\"res\":\"ok\"}"
+}

@@ -1,0 +1,46 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: component.localizer
+  role: component
+
+spatial:
+  participation: required
+  ports:
+    map:
+      direction: export
+      semantic: map_reference
+      frame: map
+    antenna:
+      direction: import
+      semantic: observation_frame
+      frame: gnss_antenna
+    reference:
+      direction: export
+      semantic: odometry_reference
+      source:
+        requirement: odometry
+        port: reference
+    body:
+      direction: export
+      semantic: localized_body
+      source:
+        requirement: odometry
+        port: body
+
+requires:
+  gnss_source:
+    contract: api.sensor.gnss.source.v1
+    cardinality: one
+    required: true
+  odometry:
+    contract: component.mobile_base.odometry.v1
+    cardinality: one
+    required: true
+
+provides:
+  positioning:
+    contract: api.positioning.absolute_pose.v1
+  localizer:
+    contract: component.localizer.v1

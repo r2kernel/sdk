@@ -1,0 +1,28 @@
+{
+  "description": "lifecycle_transition message pushed to the subsystem's notify endpoint (reason is null without an operator reason)",
+  "message": {
+    "cmd": "lifecycle_transition",
+    "previous_lifecycle": "Ready",
+    "reason": "operator request",
+    "request_id": "component.wire_fixture-1793463571833069599",
+    "subsystem": "component.wire_fixture",
+    "transition": "start"
+  },
+  "producer": "control backend state/subsystem_runtime.rs request_subsystem_lifecycle_transition",
+  "readers": [
+    "python: core/event_client.py _process_notify_message -> wrapper/_subsystem_lifecycle.py _handle_lifecycle_transition_request",
+    "cpp: src/core/client_impl_runtime_registration.hpp (kLifecycleTransition)"
+  ],
+  "types": {
+    "cmd": "string",
+    "previous_lifecycle": "string",
+    "reason": "string",
+    "request_id": "string",
+    "subsystem": "string",
+    "transition": "string"
+  },
+  "volatile": [
+    "request_id"
+  ],
+  "wire": "{\"cmd\":\"lifecycle_transition\",\"previous_lifecycle\":\"Ready\",\"reason\":\"operator request\",\"request_id\":\"component.wire_fixture-1793463571833069599\",\"subsystem\":\"component.wire_fixture\",\"transition\":\"start\"}"
+}

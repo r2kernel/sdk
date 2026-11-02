@@ -1,0 +1,99 @@
+version: 1
+id: msg.locomotion.legged.v1
+kind: message_set
+description: Legged locomotion payloads shared by quadruped and humanoid systems.
+imports:
+  msg.core.spatial: v1
+messages:
+  ContactState:
+    description: Contact state for a single support/contact point.
+    fields:
+      - name: contact_id
+        type: string
+      - name: active
+        type: bool
+      - name: contact_force
+        type: msg.core.spatial/Force
+        optional: true
+      - name: contact_pose
+        type: msg.core.spatial/Pose
+        optional: true
+  ContactArray:
+    description: Aggregated contact state payload for a locomotion system.
+    fields:
+      - name: states
+        type: vector<ContactState>
+  FootPose:
+    description: Named foothold or end-effector pose used by locomotion controllers.
+    fields:
+      - name: foot_id
+        type: string
+      - name: pose
+        type: msg.core.spatial/Pose
+  FootState:
+    description: State for a locomotion contact point or foot endpoint.
+    fields:
+      - name: foot_id
+        type: string
+      - name: pose
+        type: msg.core.spatial/Pose
+      - name: in_contact
+        type: bool
+      - name: contact_force
+        type: msg.core.spatial/Force
+        optional: true
+  SupportPolygon:
+    description: Support polygon expressed as planar points in body or world coordinates.
+    fields:
+      - name: frame_id
+        type: string
+      - name: vertices
+        type: vector<msg.core.spatial/Position>
+  StepTarget:
+    description: Next planned foothold target for a locomotion contact point.
+    fields:
+      - name: foot_id
+        type: string
+      - name: target_pose
+        type: msg.core.spatial/Pose
+      - name: swing_duration
+        type: float32
+  BodyState:
+    description: Locomotion body state independent of concrete robot morphology.
+    fields:
+      - name: body_pose
+        type: msg.core.spatial/Pose
+      - name: body_twist
+        type: msg.core.spatial/Twist
+        optional: true
+  CenterOfMassState:
+    description: Center-of-mass state for balance and locomotion control.
+    fields:
+      - name: position
+        type: msg.core.spatial/Position
+      - name: velocity
+        type: msg.core.spatial/Vector3
+        optional: true
+      - name: acceleration
+        type: msg.core.spatial/Vector3
+        optional: true
+  BalanceState:
+    description: High-level balance indicators shared by legged systems.
+    fields:
+      - name: stable
+        type: bool
+      - name: support_polygon
+        type: SupportPolygon
+        optional: true
+      - name: center_of_mass
+        type: CenterOfMassState
+        optional: true
+  GaitPhase:
+    description: Named gait phase for locomotion sequencing.
+    fields:
+      - name: phase_name
+        type: string
+      - name: phase_progress
+        type: float32
+      - name: active_contacts
+        type: vector<string>

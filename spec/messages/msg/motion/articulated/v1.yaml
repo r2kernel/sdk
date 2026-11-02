@@ -1,0 +1,42 @@
+version: 1
+id: msg.motion.articulated.v1
+kind: message_set
+description: Articulated-motion payloads shared by jointed mechanisms.
+imports:
+  msg.core.kinematics: v1
+messages:
+  JointWayPoint:
+    description: Joint-space waypoint and motion tuning values for articulated motion.
+    fields:
+      - name: q
+        type: msg.core.kinematics/JointValues
+      - name: radius
+        type: float32
+      - name: vel
+        type: float32
+      - name: cornering_vel
+        type: float32
+      - name: acc
+        type: float32
+  RampRequest:
+    description: Optional ramp duration for a stop or pause transition.
+    fields:
+      - name: ramp_time_ns
+        type: int64
+        optional: true
+  MoveJRequest:
+    description: Joint-space programmed-motion request.
+    fields:
+      - name: waypoints
+        type: vector<JointWayPoint>
+      - name: finish_mode
+        type: string
+        optional: true
+  TrajectoryOffset:
+    description: Joint-space offset applied to an active programmed trajectory.
+    fields:
+      - name: offset
+        type: msg.core.kinematics/JointValues
+      - name: mode
+        type: string
+        optional: true

@@ -1,0 +1,18 @@
+kind: r2kernel.deployment
+version: 1
+
+subsystems:
+  procedure_client:
+    manifest: ./python/procedure_client.subsystem.yaml
+  procedure_server:
+    manifest: ./python/procedure_server.subsystem.yaml
+  procedure_client_cpp:
+    manifest: ./cpp/procedure_client_cpp.subsystem.yaml
+  procedure_server_cpp:
+    manifest: ./cpp/procedure_server_cpp.subsystem.yaml
+
+bindings:
+  procedure_client.procedure:
+    to: procedure_server.procedure
+  procedure_client_cpp.procedure:
+    to: procedure_server_cpp.procedure

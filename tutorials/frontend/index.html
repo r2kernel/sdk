@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="r2kernel-app-target" content="app.cleaner.learned_radar" />
+    <title>R2Kernel Robot Cleaner Tutorial</title>
+    <link rel="stylesheet" href="./styles.css?v=robot-cleaner-layout-1" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">R2Kernel Tutorial</p>
+          <h1>Robot Cleaner</h1>
+        </div>
+        <div class="connection">
+          <span class="connection-label">Runtime</span>
+          <input id="ws-base" value="ws://127.0.0.1:8001" aria-label="WebSocket base URL" />
+          <button id="connect-btn">Reconnect</button>
+          <button id="disconnect-btn">Disconnect</button>
+          <span id="connection-state">starting</span>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <section class="panel controls">
+          <h2>Arena</h2>
+          <div class="button-grid two">
+            <button id="reset-btn">Reset</button>
+            <button id="spawn-btn">Spawn</button>
+            <button id="far-target-btn" class="wide">Reset with far target</button>
+          </div>
+
+          <h2>Application Status</h2>
+          <div class="button-grid two application-controls">
+            <button id="app-start-btn">Start policy</button>
+            <button id="app-stop-btn">Stop policy</button>
+          </div>
+          <div class="action-card" id="action-card">
+            <div>
+              <span>Last</span>
+              <strong id="action-name">idle</strong>
+            </div>
+            <div>
+              <span>State</span>
+              <strong id="action-state">idle</strong>
+            </div>
+          </div>
+          <div class="action-steps" id="action-steps"></div>
+
+          <h2>Learned Policy</h2>
+          <div class="policy-card">
+            <div><span>Model</span><strong id="policy-model">waiting</strong></div>
+            <div><span>Observation</span><strong id="policy-observation">waiting</strong></div>
+            <div><span>Proposed</span><strong id="policy-proposed">—</strong></div>
+            <div><span>Applied</span><strong id="policy-applied">—</strong></div>
+          </div>
+          <p class="policy-note">Radar range is fixed at 0.30 m. The model explores when no target is visible; component.mobile validates every timed command.</p>
+        </section>
+
+        <section class="stage">
+          <canvas id="arena" width="1100" height="760" tabindex="0" aria-label="Robot cleaner arena"></canvas>
+          <div class="status-strip">
+            <div><span>Remaining</span><strong id="remaining-count">0</strong></div>
+            <div><span>Payload</span><strong id="payload-count">0</strong></div>
+            <div><span>Burned</span><strong id="burned-count">0</strong></div>
+            <div><span>Pose error</span><strong id="localization-error">acquiring</strong></div>
+            <div><span>Runtime</span><strong id="runtime-label">offline</strong></div>
+          </div>
+        </section>
+
+        <section class="panel telemetry">
+          <h2>World State</h2>
+          <pre id="world-view">{}</pre>
+          <h2>Runtime Log</h2>
+          <pre id="log-view"></pre>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="./app.js?v=robot-cleaner-world-23"></script>
+  </body>
+</html>

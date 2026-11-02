@@ -1,0 +1,67 @@
+version: 1
+id: msg.actuator.servo.v1
+kind: message_set
+description: Periodic servo Control request, typed domain response, and the low-level actuator payloads they carry.
+imports:
+  msg.control: v1
+  msg.core.kinematics: v1
+  msg.core.linalg: v1
+messages:
+  ActuatorCommand:
+    description: Low-level actuator command for deterministic servo links. Execution time and validity are carried by the control envelope.
+    fields:
+    - name: emergency
+      type: bool
+      description: True when the command is an emergency or protective-stop command.
+    - name: servo_cmd
+      type: uint8
+      description: Controller-defined servo command code such as enable, disable, or fault reset.
+    - name: drive_mode
+      type: vector<uint8>
+      description: Per-axis drive mode values.
+    - name: target
+      type: msg.core.kinematics/JointCommandPrecise
+    - name: stiffness
+      type: msg.core.linalg/DenseMatrix
+      optional: true
+    - name: damping
+      type: msg.core.linalg/DenseMatrix
+      optional: true
+  ActuatorState:
+    description: Low-level actuator state frame returned by a servo link.
+    fields:
+    - name: link_alive
+      type: bool
+    - name: servo_on
+      type: bool
+    - name: state
+      type: msg.core.kinematics/JointStatePrecise
+    - name: error_code
+      type: vector<uint8>
+      optional: true
+    - name: error_raw
+      type: vector<uint16>
+      optional: true
+  ServoControlRequest:
+    description: Periodic servo Control request carrying one actuator command per cycle.
+    fields:
+    - name: cycle
+      type: msg.control/ControlCycle
+    - name: command
+      type: ActuatorCommand
+  ServoControlResponse:
+    description: >-
+      Domain application status and sampled actuator link state. Runtime execution
+      completion remains in the runtime response envelope.
+    fields:
+    - name: cycle
+      type: msg.control/ControlCycle
+    - name: status
+      type: string
+      description: applied, rejected, or device_error.
+    - name: state
+      type: ActuatorState
+      optional: true
+    - name: detail
+      type: string
+      optional: true

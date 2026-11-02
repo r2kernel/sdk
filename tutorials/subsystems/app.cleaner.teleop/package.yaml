@@ -1,0 +1,41 @@
+schema_version: 1
+name: tutorial.robot_cleaner.teleop
+description: Robot cleaner teleoperation application package.
+entrypoint:
+  command: run.py
+  args:
+    - --name
+    - "{{params.subsystem.name}}"
+    - --manifest
+    - subsystem.yaml
+    - --deployment-manifest
+    - "{{params.deployment.manifest}}"
+    - --log-level
+    - "{{params.log.level}}"
+parameters:
+  subsystem.name:
+    type: string
+    default: "{{instance.id}}"
+  deployment.manifest:
+    type: string
+    default: ""
+  log.level:
+    type: string
+    default: INFO
+  frontend.api_port:
+    type: integer
+    default: 18191
+frontend:
+  type: static
+  root: frontend
+  index: index.html
+  title: Cleaner Teleop
+  context:
+    api: http://127.0.0.1:{{params.frontend.api_port}}/
+resources:
+  network:
+    interfaces: []
+  devices:
+    paths: []
+  sandbox:
+    network: brokered

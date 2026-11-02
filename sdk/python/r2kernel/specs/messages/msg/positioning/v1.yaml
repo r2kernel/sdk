@@ -1,0 +1,26 @@
+version: 1
+id: msg.positioning.v1
+kind: message_set
+description: Absolute positioning measurements produced by positioning gateways.
+imports:
+  msg.core.spatial: v1
+messages:
+  AbsolutePoseFix:
+    description: A measured body pose in a global reference frame.
+    fields:
+      - name: frame_id
+        type: string
+        description: Global reference frame in which the measurement is expressed.
+      - name: child_frame_id
+        type: string
+        description: Body frame measured by the positioning device.
+      - name: pose
+        type: msg.core.spatial/Pose
+      - name: covariance
+        type: msg.core.spatial/Covariance6x6
+      - name: quality
+        type: float32
+        optional: true
+      - name: source
+        type: string
+        optional: true

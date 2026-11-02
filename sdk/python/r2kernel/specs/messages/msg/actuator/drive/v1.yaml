@@ -1,0 +1,32 @@
+version: 1
+id: msg.actuator.drive.v1
+kind: message_set
+description: Low-level drive command and state payloads for gateway contracts.
+messages:
+  DriveCommand:
+    fields:
+      - name: channels
+        type: vector<uint32>
+      - name: mode
+        type: vector<uint8>
+      - name: target
+        type: vector<float64>
+      - name: feedforward
+        type: vector<float64>
+        optional: true
+  DriveState:
+    fields:
+      - name: channels
+        type: vector<uint32>
+      - name: position
+        type: vector<float64>
+      - name: velocity
+        type: vector<float64>
+      - name: effort
+        type: vector<float64>
+        optional: true
+      - name: enabled
+        type: vector<bool>
+      - name: fault_code
+        type: vector<uint32>
+        optional: true

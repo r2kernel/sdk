@@ -1,0 +1,120 @@
+version: 1
+id: msg.sensor.rgbd.v1
+kind: message_set
+description: Paired, typed RGB-D source samples with per-plane timing and calibration.
+imports:
+  msg.control: v1
+  msg.stream: v1
+  msg.visual: v1
+  msg.sensor.depth: v1
+  msg.sensor.camera: v1
+messages:
+  RgbdStreamFormat:
+    description: >-
+      Immutable RGB-D pair format with independently described color and depth planes.
+      The provider does not imply registration or synchronization unless declared here.
+    fields:
+    - name: visual_format
+      type: msg.visual/VisualStreamFormat
+    - name: depth_format
+      type: msg.sensor.depth/DepthStreamFormat
+    - name: pairing_mode
+      type: string
+      description: hardware_synchronized or software_joined.
+    - name: spatial_relation
+      type: string
+      description: registered or unregistered.
+    - name: maximum_pair_skew_ns
+      type: int64
+    - name: color_calibration_revision
+      type: int64
+    - name: color_calibration_id
+      type: string
+    - name: depth_calibration_revision
+      type: int64
+    - name: depth_calibration_id
+      type: string
+    - name: color_frame_id
+      type: string
+    - name: depth_frame_id
+      type: string
+    - name: reference_frame_id
+      type: string
+      description: Declared common reference frame for any registered relation.
+    - name: color_intrinsics
+      type: msg.sensor.camera/CameraIntrinsics
+    - name: extrinsics_calibration_id
+      type: string
+      optional: true
+      description: >-
+        Resolvable calibration reference required when spatial_relation is registered;
+        transforms are supplied by that calibration source, not invented here.
+  RgbdSample:
+    description: Complete color/depth pair joined by capture_set_id, not by poll arrival.
+    fields:
+    - name: capture_set_id
+      type: int64
+    - name: capture_reference_time_sync_ns
+      type: int64
+    - name: color_time_offset_ns
+      type: int64
+    - name: depth_time_offset_ns
+      type: int64
+    - name: format
+      type: RgbdStreamFormat
+    - name: visual_sample
+      type: msg.visual/VisualSample
+    - name: depth_sample
+      type: msg.sensor.depth/DepthSample
+  RgbdTransferPart:
+    description: >-
+      RGB-D pairing envelope containing one or both explicitly typed planes. The
+      visual and depth parts retain their own acquired_at_sync_ns, expires_at_sync_ns,
+      sample identities, chunks, and calibration format revisions.
+    fields:
+    - name: capture_set_id
+      type: int64
+    - name: capture_reference_time_sync_ns
+      type: int64
+    - name: color_time_offset_ns
+      type: int64
+      optional: true
+    - name: depth_time_offset_ns
+      type: int64
+      optional: true
+    - name: format
+      type: RgbdStreamFormat
+      optional: true
+    - name: visual_part
+      type: msg.visual/VisualTransferPart
+      optional: true
+    - name: depth_part
+      type: msg.sensor.depth/DepthTransferPart
+      optional: true
+  RgbdCycleRequest:
+    description: Requests a prepared RGB-D sample set for a sample-exchange cycle.
+    fields:
+    - name: cycle
+      type: msg.control/ControlCycle
+    - name: after_capture_set_id
+      type: int64
+      optional: true
+    - name: resync_required
+      type: bool
+      optional: true
+  RgbdCycleResponse:
+    description: >-
+      One or more typed RGB-D transfer parts or a normal no-new-sample result. A
+      partial pair is never reported as a complete RgbdSample.
+    fields:
+    - name: cycle
+      type: msg.control/ControlCycle
+    - name: status
+      type: string
+      description: sample_available, no_new_sample, incomplete_pair, resync_required, or device_error.
+    - name: part
+      type: RgbdTransferPart
+      optional: true
+    - name: detail
+      type: string
+      optional: true

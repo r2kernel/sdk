@@ -1,0 +1,21 @@
+{
+  "component_versions": {
+    "cpp_sdk": "1.0.0",
+    "cpp_sdk_cmake": "1.0.0",
+    "python_sdk": "1.0.0"
+  },
+  "included_sdks": [
+    "python",
+    "cpp"
+  ],
+  "included_source": [
+    "tutorials",
+    "tools/qa/fixtures",
+    "spec"
+  ],
+  "release_tag": "v1.0.0",
+  "release_version": "1.0.0",
+  "runtime_core_delivery": "installer-binary",
+  "runtime_core_headers": "runtime/core/include",
+  "schema_version": 1
+}

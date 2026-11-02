@@ -1,0 +1,11 @@
+kind: r2kernel.subsystem
+version: 1
+subsystem:
+  name: fixture.operation_provider
+  role: component
+provides:
+  work:
+    contract: fixture.operation.private.v1
+    visibility: internal
+    endpoints:
+      operations: [work]

@@ -1,0 +1,30 @@
+version: 1
+id: component.manipulator.v1
+kind: component
+name: Manipulator Controller
+description: TCP/task-space manipulator controller with tooling support.
+conformance_apis:
+  - api.motion.articulated.state.v1
+  - api.motion.articulated.velocity.v1
+  - api.motion.articulated.trajectory.v1
+  - api.motion.manipulator.state.v1
+  - api.motion.manipulator.cartesian.v1
+  - api.motion.manipulator.tooling.v1
+recommended_apis:
+  - api.motion.execution.v1
+optional_apis:
+  - api.motion.articulated.trajectory.offset.v1
+  - api.motion.manipulator.cartesian.offset.v1
+  - api.motion.manipulator.wrench.v1
+  - api.motion.manipulator.tooling.calibration.v1
+  - api.motion.manipulator.kinematics.v1
+  - api.motion.manipulator.hand_guiding.v1
+spatial:
+  participation: required
+  ports:
+    base:
+      direction: import
+      semantic: manipulator_mount
+    tool:
+      direction: export
+      semantic: tool_center_point

@@ -1,0 +1,65 @@
+{
+  "decoded": {
+    "kind": "result",
+    "operation": "move_to_pose",
+    "operation_id": "6f1c2a4b9d8e4f0a8b7c6d5e4f3a2b1c",
+    "payload": {
+      "status": "reached",
+      "success": true
+    },
+    "payload_type": "msg.core.common.result.v1/Result",
+    "target": "component.wire_fixture",
+    "ts": 1793463571833070200
+  },
+  "description": "Operation result event whose result_type is a message with bool, string and an absent optional bytes field: the payload is codec-encoded (TYPED)",
+  "input": {
+    "cancel_requested": false,
+    "kind": "result",
+    "operation": "move_to_pose",
+    "operation_id": "6f1c2a4b9d8e4f0a8b7c6d5e4f3a2b1c",
+    "payload": {
+      "status": "reached",
+      "success": true
+    },
+    "payload_type": "msg.core.common.result.v1/Result",
+    "state": null,
+    "target": "component.wire_fixture",
+    "ts": 1793463571833070200
+  },
+  "layout": {
+    "fields": {
+      "operation": "move_to_pose",
+      "operation_id": "6f1c2a4b9d8e4f0a8b7c6d5e4f3a2b1c",
+      "payload_type": "msg.core.common.result.v1/Result",
+      "state": "",
+      "target": "component.wire_fixture"
+    },
+    "flag_names": [
+      "PAYLOAD",
+      "TYPED"
+    ],
+    "flags": 5,
+    "header_format": "<4sBBHqHHHHHI (little-endian, 30 bytes), then the fields in this order",
+    "kind": "result",
+    "kind_code": 2,
+    "lengths": {
+      "operation": 12,
+      "operation_id": 32,
+      "payload": 20,
+      "payload_type": 32,
+      "state": 0,
+      "target": 22
+    },
+    "magic": "SDAE",
+    "payload_hex": "01000000010700000072656163686564ffffffff",
+    "ts": 1793463571833070200,
+    "version": 1
+  },
+  "producer": "python: core/_runtime_operation_server.py _OperationExecutionMixin._encode_operation_event_wire",
+  "readers": [
+    "python: core/_runtime_operation_server.py _register_operation_subscription -> _decode_operation_event_wire",
+    "cpp: src/wrapper/operation_event_wire.hpp decode + to_message (subsystem.cpp subscribe_operation_*_impl)",
+    "rust bench client: src/operation_event.rs decode_operation_event_with (Subsystem::operation_event)"
+  ],
+  "wire_hex": "534441450102050078a2b6cc9da9e31820000c001600200000001400000036663163326134623964386534663061386237633664356534663361326231636d6f76655f746f5f706f7365636f6d706f6e656e742e776972655f666978747572656d73672e636f72652e636f6d6d6f6e2e726573756c742e76312f526573756c7401000000010700000072656163686564ffffffff"
+}

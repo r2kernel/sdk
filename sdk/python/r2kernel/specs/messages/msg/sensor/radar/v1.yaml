@@ -1,0 +1,109 @@
+version: 1
+id: msg.sensor.radar.v1
+kind: message_set
+description: Integrated rotating radar sector samples and source Control messages; no external motor is required.
+imports:
+  msg.control: v1
+messages:
+  RadarCycleRequest:
+    description: >-
+      Requests the next prepared radar sector for a sample-exchange cycle. An
+      omitted expected_session_id bootstraps session discovery and may use an
+      after_sample_id of zero. Once known, the client sends expected_session_id
+      with its cursor so a process reset cannot be mistaken for continuous coverage.
+      A same-session response may return only the immediately following sector;
+      if bounded history has evicted it, the provider reports resync_required.
+    fields:
+    - name: cycle
+      type: msg.control/ControlCycle
+    - name: expected_session_id
+      type: string
+      optional: true
+      description: Omit only for initial session discovery; otherwise anchor after_sample_id to this process session.
+    - name: after_sample_id
+      type: int64
+      optional: true
+      description: Nonnegative cursor within expected_session_id; a sample response advances it by exactly one.
+  RadarCycleResponse:
+    description: >-
+      Returns the provider's current session on every response. A session mismatch
+      or an evicted cursor returns resync_required without a sector; the client
+      adopts session_id, resets its cursor to zero, and retries before claiming
+      continuous revolution coverage.
+    fields:
+    - name: cycle
+      type: msg.control/ControlCycle
+    - name: session_id
+      type: string
+      description: >-
+        Unique process/reset identity for this radar source, including on
+        resync_required and device_error responses.
+    - name: status
+      type: string
+      description: sample_available, no_new_sample, resync_required, or device_error.
+    - name: sector
+      type: RadarSectorSample
+      optional: true
+    - name: detail
+      type: string
+      optional: true
+  RadarSectorSample:
+    description: >-
+      One sector's positive-direction angular coverage interval from an integrated
+      rotating radar. Acquisition is an interval, not an instantaneous 360-degree
+      observation. An empty returns vector is valid completed coverage with no
+      detected returns. Return azimuths lie within this interval modulo 2*pi,
+      allowing up to 1e-6 rad of endpoint quantization at either boundary.
+    fields:
+    - name: session_id
+      type: string
+      description: Must match the enclosing RadarCycleResponse.session_id.
+    - name: sample_id
+      type: int64
+      description: Positive sector identity, incremented by one for each sector within session_id.
+    - name: revolution_id
+      type: int64
+      description: Positive identity of the revolution containing this sector.
+    - name: azimuth_start_rad
+      type: float64
+      description: Start azimuth in sensor frame, normalized to [0, 2*pi).
+    - name: azimuth_span_rad
+      type: float64
+      description: Positive sweep in the positive azimuth direction, at most 2*pi; the interval may wrap through zero.
+    - name: scan_started_at_sync_ns
+      type: int64
+      description: Inclusive start of this sector's acquisition interval in r2kernel_sync nanoseconds.
+    - name: scan_ended_at_sync_ns
+      type: int64
+      description: Inclusive end of this sector's acquisition interval; must be later than scan_started_at_sync_ns.
+    - name: frame_id
+      type: string
+      description: Explicit sensor frame in which sector and return azimuths are expressed.
+    - name: revolution_complete
+      type: bool
+      description: True when this sector completes its containing revolution.
+    - name: returns
+      type: vector<RadarReturn>
+      description: Returns observed in this coverage interval; an empty vector is valid.
+  RadarReturn:
+    description: >-
+      One measured radar return in sensor coordinates. The public contract carries
+      no truth ID, object class, or global coordinates.
+    fields:
+    - name: range_m
+      type: float32
+      description: Finite positive range in meters.
+    - name: azimuth_rad
+      type: float64
+      description: >-
+        Sensor-frame azimuth normalized to [0, 2*pi), within the sector sweep
+        with at most 1e-6 rad of endpoint quantization.
+    - name: radial_velocity_mps
+      type: float32
+      description: Finite radial velocity in meters per second.
+    - name: signal_strength
+      type: float32
+      description: Unitless normalized signal strength in [0,1], where 1 is the provider profile's maximum.
+    - name: observed_at_sync_ns
+      type: int64
+      description: Observation time in r2kernel_sync nanoseconds, within the sector acquisition interval.

@@ -1,0 +1,22 @@
+{
+  "description": "the Control Unix socket's admission refusal: error_code and retryable",
+  "message": {
+    "error": "Control Unix socket refused the connection: connection limit reached; retry later",
+    "error_code": "connection_limit",
+    "retryable": true,
+    "status": "error"
+  },
+  "producer": "control backend udp.rs UnixRefusal::reply_value",
+  "readers": [
+    "python: core/control_client.py (status == \"error\" and retryable is True)",
+    "cpp: src/core/client_control_exchange.hpp"
+  ],
+  "types": {
+    "error": "string",
+    "error_code": "string",
+    "retryable": "boolean",
+    "status": "string"
+  },
+  "volatile": [],
+  "wire": "{\"error\":\"Control Unix socket refused the connection: connection limit reached; retry later\",\"error_code\":\"connection_limit\",\"retryable\":true,\"status\":\"error\"}"
+}

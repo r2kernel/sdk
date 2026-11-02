@@ -1,0 +1,76 @@
+kind: r2kernel.robot
+version: 1
+
+robot:
+  name: cleaner_2d
+  model: tutorial-cleaner-2d
+  profiles:
+    - tutorial.robot_cleaner.cleaner_2d.v1
+
+parts:
+  base:
+    kind: mobile_base
+  arm:
+    kind: planar_manipulator
+  gripper:
+    kind: gripper
+  incinerator:
+    kind: incinerator
+  radar:
+    kind: integrated_rotating_radar
+  positioning:
+    kind: simulated_positioning_sensor
+  localization:
+    kind: planar_localizer
+  navigation:
+    kind: planar_goal_navigator
+  device_bus:
+    kind: simulated_device_bus
+  arena:
+    kind: provided_2d_arena
+
+slots:
+  actuator_gateway:
+    role: gateway
+    part: device_bus
+    contract: api.actuator.servo.v1
+  timed_digital_output_gateway:
+    role: gateway
+    part: device_bus
+    contract: api.io.digital.timed_output.v1
+  radar_sensor_gateway:
+    role: gateway
+    part: radar
+    contract: api.sensor.radar.source.v1
+  gnss_sensor_gateway:
+    role: gateway
+    part: positioning
+    contract: api.sensor.gnss.source.v1
+  mobile_base_controller:
+    role: component
+    part: base
+    contract: component.mobile_base.odometry.v1
+  manipulator_controller:
+    role: component
+    part: arm
+    contract: component.manipulator.v1
+  gripper_controller:
+    role: component
+    part: gripper
+    contract: component.gripper.v1
+  incinerator_component:
+    role: component
+    part: incinerator
+    contract: component.trigger_actuator.v1
+  perception_controller:
+    role: component
+    part: radar
+    contract: component.perception.v1
+  localization_component:
+    role: component
+    part: localization
+    contract: component.localizer.v1
+  navigation_component:
+    role: component
+    part: navigation
+    contract: component.navigation.v1

@@ -1,0 +1,18 @@
+kind: r2kernel.deployment
+version: 1
+
+subsystems:
+  interface_digital_client:
+    manifest: ./python/interface_digital_client.subsystem.yaml
+  interface_digital_server:
+    manifest: ./python/interface_digital_server.subsystem.yaml
+  interface_digital_typed_client:
+    manifest: ./python/interface_digital_typed_client.subsystem.yaml
+  interface_digital_typed_server:
+    manifest: ./python/interface_digital_typed_server.subsystem.yaml
+
+bindings:
+  interface_digital_client.digital_io:
+    to: interface_digital_server.digital_io
+  interface_digital_typed_client.digital_io:
+    to: interface_digital_typed_server.digital_io

@@ -1,0 +1,22 @@
+version: 1
+id: msg.diagnostics.health.v1
+kind: message_set
+description: Provider-owned health and fault payloads.
+messages:
+  HealthStatus:
+    fields:
+      - name: state
+        type: string
+      - name: summary
+        type: string
+      - name: fault_codes
+        type: vector<uint32>
+        optional: true
+      - name: detail
+        type: bytes
+        optional: true
+  ClearFaultRequest:
+    fields:
+      - name: fault_code
+        type: uint32
+        optional: true

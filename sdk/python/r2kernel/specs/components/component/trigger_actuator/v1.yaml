@@ -1,0 +1,9 @@
+version: 1
+id: component.trigger_actuator.v1
+kind: component
+name: Trigger Actuator
+description: Standard component contract for a configured bounded one-shot physical actuation.
+conformance_apis:
+  - api.actuation.trigger.v1
+spatial:
+  participation: none

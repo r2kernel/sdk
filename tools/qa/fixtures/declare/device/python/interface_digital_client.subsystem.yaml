@@ -1,0 +1,12 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: interface_digital_client
+  role: component
+
+requires:
+  digital_io:
+    contract: api.io.digital.output.v1
+    cardinality: one
+    required: true

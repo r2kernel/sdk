@@ -1,0 +1,25 @@
+{
+  "description": "notify_subscriber pushed to the publisher when a subscriber joins: the subscriber's notification lock",
+  "message": {
+    "cmd": "notify_subscriber",
+    "lock_name": "/r2kernel_7d9c6e0aa191a7de",
+    "subsystem": "component.wire_late",
+    "topic": "scan"
+  },
+  "producer": "control backend state/transport_state/notifications.rs",
+  "readers": [
+    "python: core/_event_registration.py (request_publish_slots, register_subscription), core/event_client.py _process_notify_message",
+    "cpp: src/core/client_impl_events.hpp, client_control_exchange.hpp json_subscriber_locks/json_publishers, client_impl_runtime_registration.hpp (notify_publisher/notify_subscriber)",
+    "rust bench client: src/control.rs request_publish_slots/register_subscription, src/stamped_stream_runtime.rs PublisherOffer and notify_subscriber"
+  ],
+  "types": {
+    "cmd": "string",
+    "lock_name": "string",
+    "subsystem": "string",
+    "topic": "string"
+  },
+  "volatile": [
+    "lock_name"
+  ],
+  "wire": "{\"cmd\":\"notify_subscriber\",\"lock_name\":\"/r2kernel_7d9c6e0aa191a7de\",\"subsystem\":\"component.wire_late\",\"topic\":\"scan\"}"
+}

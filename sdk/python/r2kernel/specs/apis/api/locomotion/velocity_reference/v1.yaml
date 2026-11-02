@@ -1,0 +1,49 @@
+version: 1
+id: api.locomotion.velocity_reference.v1
+kind: api_contract
+name: Locomotion Velocity Reference API Contract
+description: App-facing locomotion reference API that accepts discrete procedure calls while the provider owns timed Control dispatch to its actuator.
+procedures:
+- name: set_velocity_reference
+  request: msg.locomotion.velocity.v1/VelocityCommand
+  response: msg.locomotion.velocity.v1/CommandAck
+  timing_support: none
+  semantics:
+    idempotency: endpoint_defined
+    side_effects: applies_bounded_velocity_reference
+- name: stop
+  request: msg.locomotion.velocity.v1/StopRequest
+  response: msg.locomotion.velocity.v1/CommandAck
+  timing_support: none
+  semantics:
+    idempotency: idempotent
+    side_effects: stops_platform_motion
+frames:
+  policy: endpoint_declared
+  dynamic_frames: owning_message_only
+timing:
+  clock_domain: r2kernel_sync
+  event_envelope:
+    observed: observed_at_sync_ns
+    published: published_at_sync_ns
+    received: received_at_sync_ns
+  control_envelope:
+    generated: generated_at_sync_ns
+    sent: sent_at_sync_ns
+    execute: execute_at_sync_ns
+    valid_until: valid_until_sync_ns
+state_model:
+  owner: provider
+  lifecycle: runtime_managed
+failure_semantics:
+  transport: runtime_status
+  domain: endpoint_response
+authority:
+  owner: provider
+  command_arbitration: exclusive_required_binding
+limits:
+  source: provider
+  enforcement: provider
+conformance:
+  level: public
+  payload_time: runtime_envelope

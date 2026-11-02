@@ -1,0 +1,24 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: component.perception
+  role: component
+
+spatial:
+  participation: required
+  ports:
+    sensor:
+      direction: import
+      semantic: observation_frame
+      frame: cleaner_radar
+
+requires:
+  radar_source:
+    contract: api.sensor.radar.source.v1
+    cardinality: one
+    required: true
+
+provides:
+  perception:
+    contract: component.perception.v1

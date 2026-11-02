@@ -1,0 +1,14 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: procedure_server
+  role: component
+
+provides:
+  procedure:
+    contract: tutorial.transport.procedure.v1
+    visibility: internal
+    endpoints:
+      procedures:
+        - increment

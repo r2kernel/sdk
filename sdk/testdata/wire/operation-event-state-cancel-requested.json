@@ -1,0 +1,61 @@
+{
+  "decoded": {
+    "cancel_requested": true,
+    "kind": "state",
+    "operation": "move_to_pose",
+    "operation_id": "6f1c2a4b9d8e4f0a8b7c6d5e4f3a2b1c",
+    "payload": null,
+    "payload_type": "string",
+    "state": "cancel_requested",
+    "target": "component.wire_fixture",
+    "ts": 1793463571833069700
+  },
+  "description": "Operation state event after a cancel request: state text, CANCEL_REQUESTED, no payload, and the default state_type 'string' as payload_type (not a message reference, so nothing is typed)",
+  "input": {
+    "cancel_requested": true,
+    "kind": "state",
+    "operation": "move_to_pose",
+    "operation_id": "6f1c2a4b9d8e4f0a8b7c6d5e4f3a2b1c",
+    "payload": null,
+    "payload_type": "string",
+    "state": "cancel_requested",
+    "target": "component.wire_fixture",
+    "ts": 1793463571833069700
+  },
+  "layout": {
+    "fields": {
+      "operation": "move_to_pose",
+      "operation_id": "6f1c2a4b9d8e4f0a8b7c6d5e4f3a2b1c",
+      "payload_type": "string",
+      "state": "cancel_requested",
+      "target": "component.wire_fixture"
+    },
+    "flag_names": [
+      "CANCEL_REQUESTED",
+      "STATE"
+    ],
+    "flags": 24,
+    "header_format": "<4sBBHqHHHHHI (little-endian, 30 bytes), then the fields in this order",
+    "kind": "state",
+    "kind_code": 3,
+    "lengths": {
+      "operation": 12,
+      "operation_id": 32,
+      "payload": 0,
+      "payload_type": 6,
+      "state": 16,
+      "target": 22
+    },
+    "magic": "SDAE",
+    "payload_hex": "",
+    "ts": 1793463571833069700,
+    "version": 1
+  },
+  "producer": "python: core/_runtime_operation_server.py _OperationExecutionMixin._encode_operation_event_wire",
+  "readers": [
+    "python: core/_runtime_operation_server.py _register_operation_subscription -> _decode_operation_event_wire",
+    "cpp: src/wrapper/operation_event_wire.hpp decode + to_message (subsystem.cpp subscribe_operation_*_impl)",
+    "rust bench client: src/operation_event.rs decode_operation_event_with (Subsystem::operation_event)"
+  ],
+  "wire_hex": "534441450103180084a0b6cc9da9e31820000c001600060010000000000036663163326134623964386534663061386237633664356534663361326231636d6f76655f746f5f706f7365636f6d706f6e656e742e776972655f66697874757265737472696e6763616e63656c5f726571756573746564"
+}

@@ -1,0 +1,583 @@
+# Subsystem, robot and application manifest validation cases shared by the
+# Python and C++ SDKs (deployment-validation.yaml holds the deployment cases).
+# Read by sdk/python/tests/test_sdk_parity_cases.py and
+# sdk/cpp/tests/sdk_parity_cases_test.cpp.
+#
+# Each case writes `files` (relative path -> text) into an empty directory and
+# loads `path` with the loader named by `load` (subsystem, robot, application
+# or deployment: Python r2kernel.manifest.load_*_manifest, C++
+# r2kernel::wrapper::load_*_manifest). `expect: accept` must load; `expect:
+# reject` must raise ManifestError whose message contains `error`.
+
+shared:
+  cleaner_robot: &cleaner_robot |
+    kind: r2kernel.robot
+    version: 1
+    robot:
+      name: cleaner_2d
+      profiles: [tutorial.robot_cleaner.cleaner_2d.v1]
+    kinematics: {source: ./robot.urdf}
+    slots:
+      perception_component: {role: component, contract: api.perception.query.v1}
+      digital_gateway: {role: gateway, contract: api.io.digital.timed_output.v1}
+  pick_place_app: &pick_place_app |
+    kind: r2kernel.subsystem
+    version: 1
+    subsystem: {name: app.pick_place, role: app}
+    application:
+      requires_robot:
+        profiles: [tutorial.robot_cleaner.cleaner_2d.v1]
+    requires:
+      objects: {contract: api.perception.query.v1}
+  perception_component: &perception_component |
+    kind: r2kernel.subsystem
+    version: 1
+    subsystem: {name: component.perception, role: component}
+    provides:
+      object_detection: {contract: api.perception.query.v1}
+
+cases:
+  # Subsystem manifests -------------------------------------------------------
+  - name: subsystem_unknown_public_contract
+    load: subsystem
+    path: server.subsystem.yaml
+    expect: reject
+    error: "provides.service uses unknown public contract 'vendor.private.service.v1'"
+    files:
+      server.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: server, role: component}
+        provides:
+          service: {contract: vendor.private.service.v1}
+  - name: subsystem_wrong_kind
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Subsystem manifest kind must be 'r2kernel.subsystem'"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.robot
+        version: 1
+        subsystem: {name: server, role: component}
+  - name: subsystem_unsupported_role
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Subsystem server has unsupported role 'device'; expected one of app, component, gateway, compound"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: server, role: device}
+  - name: subsystem_missing_role
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Subsystem manifest is missing subsystem.role"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: server}
+  - name: subsystem_public_interface_endpoints
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "provides.servo declares endpoints on a public interface"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: gateway.servo, role: gateway}
+        provides:
+          servo:
+            contract: api.actuator.servo.v1
+            endpoints: {controls: [servo_command]}
+  - name: subsystem_unsupported_visibility
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "provides.service has unsupported visibility 'private'; expected one of public, internal"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: server, role: component}
+        provides:
+          service: {contract: tutorial.private.v1, visibility: private}
+  - name: subsystem_capability_key
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "provides.reach field `capability` is not supported; capability contracts were removed"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.reach, role: component}
+        provides:
+          reach: {capability: capability.r2kernel.manipulation.reach.v1}
+  - name: subsystem_capability_contract
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "provides.reach contract 'capability.vendor.manipulation.reach.v1' is not supported; capability contracts were removed"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.reach, role: component}
+        provides:
+          reach: {contract: capability.vendor.manipulation.reach.v1, visibility: internal}
+  - name: gateway_internal_event_endpoints
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Gateway may use only Control endpoints: provides.state declares publishes"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: gateway.policy, role: gateway}
+        provides:
+          state:
+            contract: vendor.gateway.state.v1
+            visibility: internal
+            endpoints: {publishes: [state]}
+  - name: gateway_private_contract_without_controls
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Gateway private contract 'vendor.gateway.v1' in provides.bus requires explicit internal Control endpoints"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: gateway.policy, role: gateway}
+        provides:
+          bus: {contract: vendor.gateway.v1, visibility: internal}
+  - name: gateway_public_contract_without_controls
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Gateway public contract 'api.perception.query.v1' in provides.query must declare at least one Control endpoint"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: gateway.policy, role: gateway}
+        provides:
+          query: {contract: api.perception.query.v1}
+  - name: gateway_public_contract_with_procedures
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Gateway may use only Control endpoints: provides.velocity (api.locomotion.velocity.v1) also declares"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: gateway.policy, role: gateway}
+        provides:
+          velocity: {contract: api.locomotion.velocity.v1}
+  - name: gateway_private_controls
+    load: subsystem
+    path: subsystem.yaml
+    expect: accept
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: gateway.policy, role: gateway}
+        provides:
+          bus:
+            contract: vendor.gateway.v1
+            visibility: internal
+            endpoints: {controls: [bus_command]}
+  - name: app_requires_control_api
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Subsystem app.policy with role 'app' cannot declare or consume Control endpoints through requires.motion (api.actuator.servo.v1)"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: app.policy, role: app}
+        requires:
+          motion: {contract: api.actuator.servo.v1}
+  - name: app_requires_control_component
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Subsystem app.policy with role 'app' cannot declare or consume Control endpoints through requires.arm (component.manipulator.v1)"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: app.policy, role: app}
+        requires:
+          arm: {contract: component.manipulator.v1}
+  - name: app_internal_control_endpoints
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Subsystem app.policy with role 'app' cannot declare or consume internal Control endpoints in provides.private_control"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: app.policy, role: app}
+        provides:
+          private_control:
+            contract: tutorial.private.v1
+            visibility: internal
+            endpoints: {controls: [drive]}
+  - name: compound_provides
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Compound subsystem compound.policy is declarative and cannot declare provides interfaces"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: compound.policy, role: compound}
+        provides:
+          query: {contract: api.perception.query.v1}
+  - name: compound_requirement_not_component
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Compound requirement 'query' must reference a component.* contract; got 'api.perception.query.v1'"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: compound.policy, role: compound}
+        requires:
+          query: {contract: api.perception.query.v1}
+  - name: compound_control_export
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Compound subsystem compound.policy cannot export Control endpoints through exports.velocity (api.motion.articulated.velocity.v1)"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: compound.policy, role: compound}
+        requires:
+          arm: {contract: component.manipulator.v1}
+        exports:
+          velocity:
+            contract: api.motion.articulated.velocity.v1
+            from: {requirement: arm}
+  - name: compound_export_not_guaranteed
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "exports.query selects api.perception.query.v1, but component.manipulator.v1 does not guarantee it in conformance_apis"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: compound.policy, role: compound}
+        requires:
+          arm: {contract: component.manipulator.v1}
+        exports:
+          query:
+            contract: api.perception.query.v1
+            from: {requirement: arm}
+  - name: compound_export
+    load: subsystem
+    path: subsystem.yaml
+    expect: accept
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: compound.policy, role: compound}
+        requires:
+          arm: {contract: component.manipulator.v1}
+        exports:
+          trajectory:
+            contract: api.motion.articulated.trajectory.v1
+            from: {requirement: arm}
+  - name: exports_on_component
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Only compound subsystems may declare exports"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.policy, role: component}
+        requires:
+          arm: {contract: component.manipulator.v1}
+        exports:
+          trajectory:
+            contract: api.motion.articulated.trajectory.v1
+            from: {requirement: arm}
+  - name: provides_and_exports_overlap
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Subsystem compound.policy declares the same interface in provides and exports: trajectory"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: compound.policy, role: compound}
+        requires:
+          arm: {contract: component.manipulator.v1}
+        provides:
+          trajectory: {contract: api.motion.articulated.trajectory.v1}
+        exports:
+          trajectory:
+            contract: api.motion.articulated.trajectory.v1
+            from: {requirement: arm}
+  - name: spatial_invalid_participation
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "spatial.participation must be one of none, required"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.spatial, role: component}
+        spatial: {participation: optional}
+  - name: spatial_frame_and_source
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "spatial.ports.base cannot define both frame and source"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.spatial, role: component}
+        spatial:
+          participation: required
+          ports:
+            base:
+              direction: import
+              semantic: mount
+              frame: base
+              source: {requirement: parent, port: tool}
+  - name: spatial_none_with_ports
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "spatial.participation none cannot declare ports or mounts"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.spatial, role: component}
+        spatial:
+          participation: none
+          ports:
+            base: {direction: import, semantic: mount, frame: base}
+  - name: spatial_mount_translation_length
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "spatial.mounts.arm.transform.translation must contain exactly 3 numbers"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: compound.cell, role: compound}
+        spatial:
+          participation: required
+          mounts:
+            - name: arm
+              parent: {requirement: base, port: tool}
+              child: {requirement: arm, port: base}
+              transform: {translation: [0.0, 1.0]}
+  - name: spatial_mount_zero_quaternion
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "spatial.mounts.arm rotation quaternion must be non-zero"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: compound.cell, role: compound}
+        spatial:
+          participation: required
+          mounts:
+            - name: arm
+              parent: {requirement: base, port: tool}
+              child: {requirement: arm, port: base}
+              transform: {rotation_xyzw: [0.0, 0.0, 0.0, 0.0]}
+  - name: component_without_spatial_participation
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Subsystem component.gripper implements component.gripper.v1, which requires spatial participation"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.gripper, role: component}
+        provides:
+          gripper: {contract: component.gripper.v1}
+  - name: component_missing_spatial_port
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Subsystem component.gripper is missing spatial port 'grasp' required by component.gripper.v1"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.gripper, role: component}
+        spatial:
+          participation: required
+          ports:
+            base: {direction: import, semantic: end_effector_mount, frame: flange}
+        provides:
+          gripper: {contract: component.gripper.v1}
+  - name: component_spatial_port_direction
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Subsystem component.gripper spatial port 'grasp' direction 'import' does not match component.gripper.v1 direction 'export'"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.gripper, role: component}
+        spatial:
+          participation: required
+          ports:
+            base: {direction: import, semantic: end_effector_mount, frame: flange}
+            grasp: {direction: import, semantic: grasp_frame, frame: grasp}
+        provides:
+          gripper: {contract: component.gripper.v1}
+  - name: component_spatial_conformance
+    load: subsystem
+    path: subsystem.yaml
+    expect: accept
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.gripper, role: component}
+        spatial:
+          participation: required
+          ports:
+            base: {direction: import, semantic: end_effector_mount, frame: flange}
+            grasp: {direction: export, semantic: grasp_frame, frame: grasp}
+        provides:
+          gripper: {contract: component.gripper.v1}
+
+  # Robot and application manifests ------------------------------------------
+  - name: robot_top_level_capabilities
+    load: robot
+    path: r2kernel.robot.yaml
+    expect: reject
+    error: "robot manifest field `capabilities` is not supported"
+    files:
+      r2kernel.robot.yaml: |
+        kind: r2kernel.robot
+        version: 1
+        robot: {name: platform}
+        capabilities: {}
+  - name: robot_nested_capabilities
+    load: robot
+    path: r2kernel.robot.yaml
+    expect: reject
+    error: "robot manifest field `capabilities` is not supported"
+    files:
+      r2kernel.robot.yaml: |
+        kind: r2kernel.robot
+        version: 1
+        robot:
+          name: platform
+          capabilities: {}
+  - name: robot_slot_capability_contract
+    load: robot
+    path: r2kernel.robot.yaml
+    expect: reject
+    error: "Robot slot controller contract 'capability.r2kernel.mobility.body_motion.v1' is not supported; capability contracts were removed"
+    files:
+      r2kernel.robot.yaml: |
+        kind: r2kernel.robot
+        version: 1
+        robot: {name: platform}
+        slots:
+          controller: {role: component, contract: capability.r2kernel.mobility.body_motion.v1}
+  - name: robot_slot_nonstandard_contract
+    load: robot
+    path: r2kernel.robot.yaml
+    expect: reject
+    error: "robot slots must reference R2Kernel spec contracts"
+    files:
+      r2kernel.robot.yaml: |
+        kind: r2kernel.robot
+        version: 1
+        robot: {name: tutorial_platform}
+        slots:
+          device_gateway: {role: gateway, contract: tutorial.robot_cleaner.device_bus.v1}
+  - name: robot_slot_app_role
+    load: robot
+    path: r2kernel.robot.yaml
+    expect: reject
+    error: "Robot slot ui has unsupported role 'app'; robot slots must be one of component, gateway, compound"
+    files:
+      r2kernel.robot.yaml: |
+        kind: r2kernel.robot
+        version: 1
+        robot: {name: platform}
+        slots:
+          ui: {role: app}
+  - name: robot_wrong_kind
+    load: robot
+    path: r2kernel.robot.yaml
+    expect: reject
+    error: "Robot manifest kind must be 'r2kernel.robot'"
+    files:
+      r2kernel.robot.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        robot: {name: platform}
+  - name: robot_platform
+    load: robot
+    path: r2kernel.robot.yaml
+    expect: accept
+    files:
+      r2kernel.robot.yaml: *cleaner_robot
+  - name: application_capabilities
+    load: application
+    path: subsystem.yaml
+    expect: reject
+    error: "application robot requirement field `capabilities` is not supported"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: app.pick_place, role: app}
+        application:
+          requires_robot:
+            capabilities:
+              perception.objects: {capability: capability.r2kernel.perception.object_detection.v1}
+  - name: application_component_role
+    load: application
+    path: subsystem.yaml
+    expect: reject
+    error: "has role 'component'; expected 'app'"
+    files:
+      subsystem.yaml: *perception_component
+  - name: application_manifest
+    load: application
+    path: subsystem.yaml
+    expect: accept
+    files:
+      subsystem.yaml: *pick_place_app

@@ -1,0 +1,13 @@
+kind: r2kernel.subsystem
+version: 1
+subsystem:
+  name: fixture.raw_gateway
+  role: gateway
+provides:
+  servo:
+    contract: api.actuator.servo.v1
+  local:
+    contract: fixture.raw_gateway.private.v1
+    visibility: internal
+    endpoints:
+      controls: [private_echo]

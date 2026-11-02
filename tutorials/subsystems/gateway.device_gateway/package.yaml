@@ -1,0 +1,37 @@
+schema_version: 1
+name: tutorial.robot_cleaner.device_gateway
+description: Robot cleaner simulator-backed device gateway package.
+contracts:
+  spec_roots:
+    - spec
+entrypoint:
+  command: run.py
+  args:
+    - --name
+    - "{{params.subsystem.name}}"
+    - --manifest
+    - subsystem.yaml
+    - --simulator-url
+    - "{{params.simulator.url}}"
+    - --simulator-timeout-ms
+    - "{{params.simulator.timeout_ms}}"
+    - --log-level
+    - "{{params.log.level}}"
+parameters:
+  subsystem.name:
+    type: string
+    default: "{{instance.id}}"
+  simulator.url:
+    type: string
+    default: http://127.0.0.1:8092
+  simulator.timeout_ms:
+    type: integer
+    default: 1000
+  log.level:
+    type: string
+    default: INFO
+resources:
+  network:
+    interfaces: []
+  devices:
+    paths: []

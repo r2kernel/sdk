@@ -1,0 +1,67 @@
+version: 1
+id: msg.locomotion.velocity.v1
+kind: message_set
+description: Canonical shared locomotion body-velocity payload family for timed control, acknowledgements, limits, and stop
+  requests.
+imports:
+  msg.core.spatial: v1
+messages:
+  VelocityCommand:
+    description: Body-velocity command payload. Command frame, execution time, and validity are defined by the API and control envelope.
+    fields:
+    - name: twist
+      type: msg.core.spatial/Twist
+      description: Body twist command in the controller's declared command frame.
+    - name: source
+      type: string
+      optional: true
+      description: Optional command source identifier.
+    - name: sequence
+      type: int64
+      optional: true
+      description: Optional source-local monotonically increasing sequence.
+  CommandAck:
+    description: Domain acknowledgement for locomotion requests. Runtime execution timing is reported by the response envelope.
+    fields:
+    - name: accepted
+      type: bool
+    - name: reason
+      type: string
+    - name: applied_twist
+      type: msg.core.spatial/Twist
+      optional: true
+      description: Applied or clamped twist.
+    - name: deadline_missed
+      type: bool
+      optional: true
+  VelocityLimits:
+    description: Runtime velocity and acceleration limits for locomotion velocity control.
+    fields:
+    - name: max_linear_x_mps
+      type: float32
+    - name: max_linear_y_mps
+      type: float32
+      optional: true
+    - name: max_linear_z_mps
+      type: float32
+      optional: true
+    - name: max_angular_x_radps
+      type: float32
+      optional: true
+    - name: max_angular_y_radps
+      type: float32
+      optional: true
+    - name: max_angular_z_radps
+      type: float32
+    - name: max_linear_accel_mps2
+      type: float32
+      optional: true
+    - name: max_angular_accel_radps2
+      type: float32
+      optional: true
+  StopRequest:
+    description: Controlled stop request for a locomotion controller.
+    fields:
+    - name: ramp_time_ns
+      type: int64
+      optional: true

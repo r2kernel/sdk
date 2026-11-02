@@ -1,0 +1,42 @@
+# Verified Protocol host authority of an inbound Control request.
+# Read by sdk/python/tests/test_sdk_parity_cases.py and
+# sdk/cpp/tests/control_local_policy_test.cpp.
+# sender: the request sender; verified: the manager connection was verified.
+# authority: what current_protocol_host_authority() returns while the handler
+# runs, with the sender the handler sees. error: expected substring of the
+# refusal (the handler does not run).
+cases:
+  - name: protocol_host
+    sender: '__r2kernel_host_v1__:{"kind": "protocol", "peer": "compute", "epoch": "backend-a", "codec_source": ""}'
+    verified: true
+    authority: {kind: protocol, peer: compute, epoch: backend-a}
+    handler_sender: "host:compute"
+  - name: kind_mismatch
+    sender: '__r2kernel_host_v1__:{"kind": "control", "peer": "compute", "epoch": "backend-a", "codec_source": ""}'
+    verified: true
+    error: "Authenticated host authority kind mismatch"
+  - name: missing_codec_source
+    sender: '__r2kernel_host_v1__:{"kind": "protocol", "peer": "compute", "epoch": "backend-a", "codec": ""}'
+    verified: true
+    error: "Malformed authenticated transport context"
+  - name: empty_peer
+    sender: '__r2kernel_host_v1__:{"kind": "protocol", "peer": "", "epoch": "backend-a", "codec_source": ""}'
+    verified: true
+    error: "Malformed authenticated transport context"
+  - name: not_json
+    sender: '__r2kernel_host_v1__:{"kind": "protocol"'
+    verified: true
+    error: "Malformed authenticated transport context"
+  - name: unverified_manager
+    sender: '__r2kernel_host_v1__:{"kind": "protocol", "peer": "compute", "epoch": "backend-a", "codec_source": ""}'
+    verified: false
+    error: "Authenticated transport context requires a verified manager connection"
+  - name: unknown_version
+    sender: '__r2kernel_host_v2__:{"kind": "protocol", "peer": "compute", "epoch": "backend-a", "codec_source": ""}'
+    verified: true
+    error: "Unsupported authenticated transport context"
+  - name: plain_sender
+    sender: "client.app"
+    verified: false
+    authority: null
+    handler_sender: "client.app"

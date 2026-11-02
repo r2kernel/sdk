@@ -1,0 +1,29 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: component.gripper
+  role: component
+
+spatial:
+  participation: required
+  ports:
+    base:
+      direction: import
+      semantic: end_effector_mount
+      frame: gripper_mount
+    grasp:
+      direction: export
+      semantic: grasp_frame
+      frame: cleaner_grasp
+
+requires:
+  digital_io:
+    contract: api.tutorial.gateway.device_gateway.digital_io.v1
+    visibility: public
+    cardinality: one
+    required: true
+
+provides:
+  gripper:
+    contract: component.gripper.v1

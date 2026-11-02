@@ -1,0 +1,49 @@
+schema_version: 1
+name: tutorial.robot_cleaner.incinerator
+description: Robot cleaner incinerator component subsystem package.
+entrypoint:
+  command: run.py
+  args:
+    - --name
+    - "{{params.subsystem.name}}"
+    - --manifest
+    - subsystem.yaml
+    - --deployment-manifest
+    - "{{params.deployment.manifest}}"
+    - --binding
+    - "{{params.binding.timed_digital_output}}"
+    - --output-index
+    - "{{params.incinerator.output_index}}"
+    - --pulse-ms
+    - "{{params.incinerator.pulse_ms}}"
+    - --control-period-ms
+    - "{{params.incinerator.control_period_ms}}"
+    - --log-level
+    - "{{params.log.level}}"
+parameters:
+  subsystem.name:
+    type: string
+    default: "{{instance.id}}"
+  deployment.manifest:
+    type: string
+    default: ""
+  binding.timed_digital_output:
+    type: string
+    default: timed_digital_output
+  incinerator.output_index:
+    type: integer
+    default: 1
+  incinerator.pulse_ms:
+    type: number
+    default: 120.0
+  incinerator.control_period_ms:
+    type: number
+    default: 20.0
+  log.level:
+    type: string
+    default: INFO
+resources:
+  network:
+    interfaces: []
+  devices:
+    paths: []

@@ -1,0 +1,14 @@
+kind: r2kernel.subsystem
+version: 1
+
+subsystem:
+  name: operation_server_cpp
+  role: component
+
+provides:
+  operation:
+    contract: tutorial.transport.operation.v1
+    visibility: internal
+    endpoints:
+      operations:
+        - count_to

@@ -1,0 +1,109 @@
+version: 1
+id: msg.core.kinematics.v1
+kind: message_set
+description: Canonical kinematics message set for robot-family-agnostic motion representations.
+imports:
+  msg.core.spatial: v1
+messages:
+  JointValues:
+    description: Generic joint vector for an articulated chain.
+    fields:
+      - name: names
+        type: vector<string>
+        optional: true
+      - name: values
+        type: vector<float32>
+  JointLimits:
+    description: Limit values for a single articulated joint.
+    fields:
+      - name: name
+        type: string
+      - name: min_position
+        type: float32
+      - name: max_position
+        type: float32
+      - name: max_velocity
+        type: float32
+      - name: max_acceleration
+        type: float32
+      - name: max_effort
+        type: float32
+  JointState:
+    description: Measured joint state for an articulated chain.
+    fields:
+      - name: names
+        type: vector<string>
+        optional: true
+      - name: position
+        type: vector<float32>
+      - name: velocity
+        type: vector<float32>
+        optional: true
+      - name: effort
+        type: vector<float32>
+        optional: true
+  JointVelocity:
+    description: Joint-space velocity command for an articulated chain.
+    fields:
+      - name: names
+        type: vector<string>
+        optional: true
+      - name: values
+        type: vector<float32>
+  JointCommand:
+    description: Commanded joint targets for an articulated chain.
+    fields:
+      - name: names
+        type: vector<string>
+        optional: true
+      - name: target_position
+        type: vector<float32>
+        optional: true
+      - name: target_velocity
+        type: vector<float32>
+        optional: true
+      - name: target_effort
+        type: vector<float32>
+        optional: true
+  JointStatePrecise:
+    description: Double-precision measured joint state for servo and high-rate controller links.
+    fields:
+      - name: names
+        type: vector<string>
+        optional: true
+      - name: position
+        type: vector<float64>
+      - name: velocity
+        type: vector<float64>
+        optional: true
+      - name: effort
+        type: vector<float64>
+        optional: true
+  JointCommandPrecise:
+    description: Double-precision commanded joint targets for servo and high-rate controller links.
+    fields:
+      - name: names
+        type: vector<string>
+        optional: true
+      - name: target_position
+        type: vector<float64>
+        optional: true
+      - name: target_velocity
+        type: vector<float64>
+        optional: true
+      - name: target_effort
+        type: vector<float64>
+        optional: true
+  KinematicChainState:
+    description: Combined articulated-chain state with task-space pose and twist.
+    fields:
+      - name: chain_id
+        type: string
+      - name: joint_state
+        type: JointState
+      - name: tip_pose
+        type: msg.core.spatial/Pose
+        optional: true
+      - name: tip_twist
+        type: msg.core.spatial/Twist
+        optional: true

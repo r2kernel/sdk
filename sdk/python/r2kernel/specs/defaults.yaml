@@ -1,0 +1,36 @@
+version: 1
+kind: namespace_defaults
+description: >-
+  Default namespace-version map shipped with this R2Kernel release. It lists
+  every public message namespace exactly once.
+namespaces:
+  msg.actuator.drive: v1
+  msg.actuator.servo: v1
+  msg.control: v1
+  msg.core.common.primitive: v1
+  msg.core.common.result: v1
+  msg.core.kinematics: v1
+  msg.core.linalg: v1
+  msg.core.spatial: v1
+  msg.diagnostics.health: v1
+  msg.io.digital.timed_output: v1
+  msg.localization: v1
+  msg.locomotion.legged: v1
+  msg.locomotion.mobile_base: v1
+  msg.locomotion.velocity: v1
+  msg.mapping: v1
+  msg.motion.articulated: v1
+  msg.motion.execution: v1
+  msg.motion.manipulator: v1
+  msg.navigation: v1
+  msg.perception: v1
+  msg.positioning: v1
+  msg.sensor.camera: v1
+  msg.sensor.depth: v1
+  msg.sensor.gnss: v1
+  msg.sensor.lidar: v1
+  msg.sensor.pointcloud: v1
+  msg.sensor.radar: v1
+  msg.sensor.rgbd: v1
+  msg.stream: v1
+  msg.visual: v1

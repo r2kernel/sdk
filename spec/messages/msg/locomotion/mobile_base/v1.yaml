@@ -1,0 +1,104 @@
+version: 1
+id: msg.locomotion.mobile_base.v1
+kind: message_set
+description: Canonical wheeled mobile-base payload family for platform state, odometry, safety state, and optional differential-drive
+  helpers.
+imports:
+  msg.core.spatial: v1
+messages:
+  ControllerModeState:
+    description: Active operating mode of a wheeled mobile-base controller.
+    fields:
+    - name: value
+      type: string
+      description: Canonical values are disabled, hold, active, fault, and stopping.
+  MobileBaseState:
+    description: Runtime state of a mobile-base controller.
+    fields:
+    - name: drive_enabled
+      type: bool
+    - name: fault_active
+      type: bool
+    - name: mode
+      type: ControllerModeState
+    - name: command_age_ms
+      type: uint32
+      optional: true
+    - name: applied_twist
+      type: msg.core.spatial/Twist
+      optional: true
+  FaultState:
+    description: Fault summary for a mobile-base controller.
+    fields:
+    - name: fault_active
+      type: bool
+    - name: fault_code
+      type: string
+      optional: true
+    - name: fault_text
+      type: string
+      optional: true
+  Odometry:
+    description: Estimated body pose and twist for a wheeled platform.
+    fields:
+    - name: frame_id
+      type: string
+      optional: true
+      description: Parent odometry frame. Defaults to odom when omitted.
+    - name: child_frame_id
+      type: string
+      optional: true
+      description: Child base frame. Defaults to base_link when omitted.
+    - name: pose
+      type: msg.core.spatial/Pose
+    - name: twist
+      type: msg.core.spatial/Twist
+      optional: true
+  EnableDriveRequest:
+    description: Request to enable or keep disabled the mobile-base drive.
+    fields:
+    - name: enable
+      type: bool
+    - name: reason
+      type: string
+      optional: true
+  DisableDriveRequest:
+    description: Request to disable mobile-base drive output.
+    fields:
+    - name: reason
+      type: string
+      optional: true
+  ClearFaultRequest:
+    description: Request to clear a latched mobile-base fault.
+    fields:
+    - name: fault_code
+      type: string
+      optional: true
+  DiffDriveKinematics:
+    description: Differential-drive geometric and wheel-speed limits.
+    fields:
+    - name: wheel_radius_m
+      type: float32
+    - name: track_width_m
+      type: float32
+    - name: max_wheel_radps
+      type: float32
+      optional: true
+  WheelCommand:
+    description: Differential-drive wheel velocity command.
+    fields:
+    - name: left_radps
+      type: float32
+    - name: right_radps
+      type: float32
+  WheelState:
+    description: Differential-drive wheel position and velocity state.
+    fields:
+    - name: left_position_rad
+      type: float32
+    - name: right_position_rad
+      type: float32
+    - name: left_velocity_radps
+      type: float32
+    - name: right_velocity_radps
+      type: float32

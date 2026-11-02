@@ -1,0 +1,106 @@
+{
+  "description": "resolve_control_target reply of a provider that reported its endpoints and codecs (registration_revision is a 32-hex string)",
+  "message": {
+    "codec_context_available": true,
+    "codec_metadata": {
+      "msg.core.common.primitive.v1/Int32Value": {
+        "fingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "ref": "msg.core.common.primitive.v1/Int32Value"
+      }
+    },
+    "contract_codecs": {},
+    "control_contracts": {
+      "servo": {
+        "request_type": "msg.core.common.primitive.v1/Int32Value",
+        "response_type": "msg.core.common.primitive.v1/Int32Value",
+        "timing_support": "none"
+      }
+    },
+    "control_port": 0,
+    "control_relay_enabled": false,
+    "controls": [
+      "servo"
+    ],
+    "host": "127.0.0.1",
+    "last_seen": 1793463571.8322246,
+    "operation_contracts": {
+      "run": {
+        "feedback_type": "msg.core.common.primitive.v1/Int32Value",
+        "request_type": "msg.core.common.primitive.v1/Int32Value",
+        "result_type": "msg.core.common.primitive.v1/Int32Value",
+        "timing_support": "optional"
+      }
+    },
+    "operations": [
+      "run"
+    ],
+    "peer_id": null,
+    "procedure_contracts": {
+      "echo": {
+        "request_type": "msg.core.common.primitive.v1/Int32Value",
+        "response_type": "msg.core.common.primitive.v1/Int32Value",
+        "timing_support": "none"
+      }
+    },
+    "procedures": [
+      "echo"
+    ],
+    "registration_revision": "52b997df75b5594829be81dcf993e6c5",
+    "res": "ok",
+    "route_kind": "local_control",
+    "session_id": "session-wire-1",
+    "subsystem": "component.wire_fixture"
+  },
+  "producer": "control backend udp.rs handle_message RESOLVE_CONTROL_TARGET -> state/control_requests.rs resolve_control_target",
+  "readers": [
+    "python: r2kernel/core/r2kernel_client.py R2KernelClient.resolve_control_target, core/_runtime_control.py",
+    "cpp: src/core/control_requests.cpp parse_control_route, src/core/client.cpp validate_prepared_control_peer",
+    "rust bench client: src/control.rs ControlClient::resolve_control_target"
+  ],
+  "types": {
+    "codec_context_available": "boolean",
+    "codec_metadata": "object",
+    "codec_metadata.msg.core.common.primitive.v1/Int32Value": "object",
+    "codec_metadata.msg.core.common.primitive.v1/Int32Value.fingerprint": "string",
+    "codec_metadata.msg.core.common.primitive.v1/Int32Value.ref": "string",
+    "contract_codecs": "object",
+    "control_contracts": "object",
+    "control_contracts.servo": "object",
+    "control_contracts.servo.request_type": "string",
+    "control_contracts.servo.response_type": "string",
+    "control_contracts.servo.timing_support": "string",
+    "control_port": "integer",
+    "control_relay_enabled": "boolean",
+    "controls": "array",
+    "controls[]": "string",
+    "host": "string",
+    "last_seen": "number",
+    "operation_contracts": "object",
+    "operation_contracts.run": "object",
+    "operation_contracts.run.feedback_type": "string",
+    "operation_contracts.run.request_type": "string",
+    "operation_contracts.run.result_type": "string",
+    "operation_contracts.run.timing_support": "string",
+    "operations": "array",
+    "operations[]": "string",
+    "peer_id": "null",
+    "procedure_contracts": "object",
+    "procedure_contracts.echo": "object",
+    "procedure_contracts.echo.request_type": "string",
+    "procedure_contracts.echo.response_type": "string",
+    "procedure_contracts.echo.timing_support": "string",
+    "procedures": "array",
+    "procedures[]": "string",
+    "registration_revision": "string",
+    "res": "string",
+    "route_kind": "string",
+    "session_id": "string",
+    "subsystem": "string"
+  },
+  "volatile": [
+    "registration_revision",
+    "last_seen",
+    "host"
+  ],
+  "wire": "{\"codec_context_available\":true,\"codec_metadata\":{\"msg.core.common.primitive.v1/Int32Value\":{\"fingerprint\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"ref\":\"msg.core.common.primitive.v1/Int32Value\"}},\"contract_codecs\":{},\"control_contracts\":{\"servo\":{\"request_type\":\"msg.core.common.primitive.v1/Int32Value\",\"response_type\":\"msg.core.common.primitive.v1/Int32Value\",\"timing_support\":\"none\"}},\"control_port\":0,\"control_relay_enabled\":false,\"controls\":[\"servo\"],\"host\":\"127.0.0.1\",\"last_seen\":1793463571.8322246,\"operation_contracts\":{\"run\":{\"feedback_type\":\"msg.core.common.primitive.v1/Int32Value\",\"request_type\":\"msg.core.common.primitive.v1/Int32Value\",\"result_type\":\"msg.core.common.primitive.v1/Int32Value\",\"timing_support\":\"optional\"}},\"operations\":[\"run\"],\"peer_id\":null,\"procedure_contracts\":{\"echo\":{\"request_type\":\"msg.core.common.primitive.v1/Int32Value\",\"response_type\":\"msg.core.common.primitive.v1/Int32Value\",\"timing_support\":\"none\"}},\"procedures\":[\"echo\"],\"registration_revision\":\"52b997df75b5594829be81dcf993e6c5\",\"res\":\"ok\",\"route_kind\":\"local_control\",\"session_id\":\"session-wire-1\",\"subsystem\":\"component.wire_fixture\"}"
+}
