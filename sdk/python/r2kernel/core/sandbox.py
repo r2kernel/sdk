@@ -1,7 +1,7 @@
 """Diagnostics for packages started with a brokered network/CAN sandbox.
 
 The launcher exports ``R2KERNEL_SANDBOX_NETWORK=brokered`` (and ``R2KERNEL_SANDBOX_CAN=brokered``) when the
-package's seccomp filter denies creating AF_INET/AF_INET6 (AF_CAN) sockets with EPERM. The filter is inherited
+package's seccomp filter allows direct AF_UNIX creation only (or separately denies AF_CAN). The filter is inherited
 by every process the package starts. These helpers run only on error paths: they probe whether this process
 is actually denied and describe the supported alternatives. Local Control/Event (AF_UNIX) is not affected.
 """
@@ -17,6 +17,10 @@ SANDBOX_BROKERED = "brokered"
 _AF_CAN = getattr(socket, "AF_CAN", 29)
 _CAN_RAW = getattr(socket, "CAN_RAW", 1)
 _SOCKET_MODULE_FILE = os.path.abspath(socket.__file__)
+_AUTHORIZED_ALTERNATIVES = (
+    "; request only sockets authorized by this package's grants, use a declared frontend listener or "
+    "R2Kernel interfaces, or validate a leader-passed descriptor (R2KERNEL_INHERITED_FDS)"
+)
 
 
 def _socket_denied(family: int, sock_type: int, proto: int = 0) -> bool:
@@ -31,19 +35,20 @@ def _socket_denied(family: int, sock_type: int, proto: int = 0) -> bool:
 def sandbox_socket_denials() -> list[str]:
     """Describe the socket families this process is denied by a brokered sandbox (empty when none)."""
     messages: list[str] = []
-    if os.environ.get(SANDBOX_NETWORK_ENV) == SANDBOX_BROKERED:
+    network_brokered = os.environ.get(SANDBOX_NETWORK_ENV) == SANDBOX_BROKERED
+    if network_brokered:
         denied = [name for name, family in (("AF_INET", socket.AF_INET), ("AF_INET6", socket.AF_INET6))
                   if _socket_denied(family, socket.SOCK_DGRAM)]
         if denied:
             messages.append(
-                f"socket({'/'.join(denied)}) denied by resources.sandbox.network=brokered; request a brokered "
-                "socket (ResourceBrokerClient.open_tcp_socket, open_udp_socket or open_frontend_tcp_listener) "
-                "or use the leader pass_fds pattern (R2KERNEL_INHERITED_FDS)"
+                f"socket({'/'.join(denied)}) denied by resources.sandbox.network=brokered"
+                + _AUTHORIZED_ALTERNATIVES
             )
-    if os.environ.get(SANDBOX_CAN_ENV) == SANDBOX_BROKERED and _socket_denied(_AF_CAN, socket.SOCK_RAW, _CAN_RAW):
+    if ((network_brokered or os.environ.get(SANDBOX_CAN_ENV) == SANDBOX_BROKERED)
+            and _socket_denied(_AF_CAN, socket.SOCK_RAW, _CAN_RAW)):
+        policy = "network" if network_brokered else "can"
         messages.append(
-            "socket(AF_CAN) denied by resources.sandbox.can=brokered; request a brokered socket "
-            "(ResourceBrokerClient.open_can_socket) or use the leader pass_fds pattern (R2KERNEL_INHERITED_FDS)"
+            f"socket(AF_CAN) denied by resources.sandbox.{policy}=brokered" + _AUTHORIZED_ALTERNATIVES
         )
     return messages
 

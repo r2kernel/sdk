@@ -1,7 +1,10 @@
 # Resource Control Tutorials
 
-This directory contains managed component packages for the R2Kernel launcher and
-resource service.
+This directory contains managed CPU utility packages and gateway resource
+probes for the R2Kernel launcher and resource service. Hardware probes generate
+an explicit gateway subsystem manifest. Component, compound and app packages
+must use `resources.sandbox.network: brokered`; only gateways may select the
+`advisory` direct-network exception.
 
 The CPU package demonstrates the minimal managed-launch flow (`<prefix>` is the
 install prefix, `/opt/r2kernel` by default):
@@ -27,7 +30,7 @@ processes with an accepted device claim.
 
 NIC claims should normally use `mode: shared` with a named network policy. Use
 `mode: exclusive` only for dedicated links that must not be shared by another
-managed component.
+managed gateway.
 
 `brokered_network/` contains an SDK-level resource lock probe. It generates a
 package with `resources.sandbox.network: brokered`; direct `AF_INET` socket
@@ -49,4 +52,7 @@ FD delivery.
 `physical_io/` contains validation probes for real device nodes and multi-NIC
 packet paths. Those tutorials generate temporary packages for the current host,
 then check whether a managed package can open a claimed device or send UDP
-traffic from a selected source interface.
+traffic from a selected source interface. Their direct UDP probes explicitly
+select `network: advisory` as trusted gateways. Brokered probes permit only
+Unix-domain socket creation in package code and receive the required hardware
+socket descriptors from the resource service.

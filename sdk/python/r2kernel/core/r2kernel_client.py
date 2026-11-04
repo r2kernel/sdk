@@ -158,6 +158,9 @@ class R2KernelClient:
             bind_port=bind_port,
         )
 
+    def open_approved_tcp_stream(self, *, grant_id: str) -> BrokeredSocketResult:
+        return ResourceBrokerClient().open_approved_tcp_stream(grant_id=grant_id)
+
     def open_tcp_socket(
         self,
         *,

@@ -86,6 +86,15 @@ class BrokeredSocketResult:
     socket: socket.socket
     metadata: dict[str, Any]
 
+    def close(self) -> None:
+        """Release this descriptor; shut down a frontend relay before closing its listener."""
+        if self.metadata.get("transport") == "unix_listener":
+            try:
+                self.socket.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+        self.socket.close()
+
 
 @dataclass(frozen=True)
 class BrokeredFdResult:
@@ -138,6 +147,45 @@ class ResourceBrokerClient:
         sock = socket.socket(fileno=fd)
         return BrokeredSocketResult(socket=sock, metadata=metadata)
 
+    def open_approved_tcp_stream(self, *, grant_id: str) -> BrokeredSocketResult:
+        """Open one root-approved app byte stream; unsupported runtimes refuse.
+
+        The returned AF_UNIX stream supports normal read/write and TLS wrapping.
+        The broker retains the TCP connection and shuts the stream down when its
+        exact execution or grant expires. Metadata includes the broker's execution_id.
+        This operation never opens a NIC claim.
+        """
+        if not isinstance(grant_id, str) or not grant_id or len(grant_id.encode("utf-8")) > 256:
+            raise ValueError("grant_id must be a nonempty identifier of at most 256 bytes")
+        metadata, fd = self._request_fd(
+            {"op": "open_approved_tcp_stream", "lease_id": self.lease_id, "grant_id": grant_id},
+            require_root=True,
+        )
+        sock = None
+        try:
+            sock = socket.socket(fileno=fd)
+            execution_id = metadata.get("execution_id")
+            if (sock.family != socket.AF_UNIX
+                    or sock.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) != socket.SOCK_STREAM
+                    or sock.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN) != 0
+                    or metadata.get("kind") != "approved_tcp_stream"
+                    or metadata.get("grant_id") != grant_id
+                    or metadata.get("lease_id") != self.lease_id
+                    or not isinstance(execution_id, str) or len(execution_id) != 32
+                    or any(char not in "0123456789abcdef" for char in execution_id)):
+                raise RuntimeError("Invalid approved TCP stream descriptor or authority metadata")
+            try:
+                sock.getpeername()
+            except OSError:
+                raise RuntimeError("Invalid approved TCP stream descriptor or authority metadata") from None
+            return BrokeredSocketResult(socket=sock, metadata=metadata)
+        except BaseException:
+            if sock is None:
+                os.close(fd)
+            else:
+                sock.close()
+            raise
+
     def open_tcp_socket(
         self,
         *,
@@ -172,6 +220,11 @@ class ResourceBrokerClient:
         bind_port: int | None = None,
         backlog: int = 128,
     ) -> BrokeredSocketResult:
+        """Return the Unix listener of a broker-owned loopback TCP frontend relay.
+
+        ``metadata.bind_host``/``bind_port`` identify the TCP endpoint. The returned socket accepts
+        AF_UNIX streams; call ``BrokeredSocketResult.close()`` when stopping the frontend.
+        """
         request = {
             "op": "open_frontend_tcp_listener",
             "lease_id": self.lease_id,
@@ -181,8 +234,29 @@ class ResourceBrokerClient:
             "backlog": int(backlog),
         }
         metadata, fd = self._request_fd(request)
-        sock = socket.socket(fileno=fd)
-        return BrokeredSocketResult(socket=sock, metadata=metadata)
+        sock = None
+        try:
+            sock = socket.socket(fileno=fd)
+            if metadata.get("domain") != "unix" or metadata.get("transport") != "unix_listener":
+                raise RuntimeError("R2Kernel frontend response must describe a Unix listener relay")
+            host, port = metadata.get("bind_host"), metadata.get("bind_port")
+            if (host not in ("127.0.0.1", "::1") or isinstance(port, bool)
+                    or not isinstance(port, int) or not 1 <= port <= 65535):
+                raise RuntimeError("R2Kernel frontend response has an invalid loopback TCP endpoint")
+            if (sock.getsockopt(socket.SOL_SOCKET, getattr(socket, "SO_DOMAIN", 39)) != socket.AF_UNIX
+                    or sock.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) != socket.SOCK_STREAM
+                    or sock.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN) != 1):
+                raise RuntimeError("R2Kernel frontend descriptor must be a listening Unix stream socket")
+            return BrokeredSocketResult(socket=sock, metadata=metadata)
+        except BaseException:
+            if sock is not None:
+                sock.close()
+            else:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+            raise
 
     def open_can_socket(
         self,
@@ -223,7 +297,7 @@ class ResourceBrokerClient:
         metadata, fd = self._request_fd(request)
         return BrokeredFdResult(fd=fd, metadata=metadata)
 
-    def _request_fd(self, request: dict[str, Any]) -> tuple[dict[str, Any], int]:
+    def _request_fd(self, request: dict[str, Any], *, require_root: bool = False) -> tuple[dict[str, Any], int]:
         # One submission: a failed receive cannot establish whether the broker
         # already performed the operation, so it must never trigger a replay.
         deadline = time.monotonic() + _RESOURCE_REQUEST_TIMEOUT_S
@@ -239,6 +313,13 @@ class ResourceBrokerClient:
             try:
                 control.settimeout(remaining())
                 control.connect(self.socket_path)
+                if require_root:
+                    if sys.platform != "linux" or not hasattr(socket, "SO_PEERCRED"):
+                        raise RuntimeError("Approved streams require Linux root broker authentication")
+                    _pid, uid, _gid = struct.unpack("3i", control.getsockopt(
+                        socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i")))
+                    if uid != 0:
+                        raise RuntimeError("Approved streams require a root-owned broker process")
                 payload = json.dumps(request, separators=(",", ":")).encode("utf-8") + b"\n"
                 control.settimeout(remaining())
                 control.sendall(payload)

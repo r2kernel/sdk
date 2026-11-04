@@ -26,7 +26,8 @@ constexpr char kDefaultResourceSocket[] = "/run/r2kernel/resourced.sock";
 struct R2KERNEL_CPP_API BrokeredSocketResult {
     int socket = -1;
     std::string metadata_json;
-    // Closes socket when it is open and sets it to -1.
+    // Closes socket when it is open and sets it to -1. Frontend Unix listeners
+    // are shut down first so the broker can stop their TCP relay.
     void close() noexcept;
 };
 
@@ -94,7 +95,13 @@ public:
     // std::runtime_error; every descriptor received with a rejected response
     // is closed.
     BrokeredSocketResult open_udp_socket(const UdpSocketOptions& options) const;
+    // Connected, revocable AF_UNIX stream to one root-approved endpoint.
+    // Validates the broker execution_id and never exposes an Internet FD.
+    BrokeredSocketResult open_approved_tcp_stream(const std::string& grant_id) const;
     BrokeredSocketResult open_tcp_socket(const TcpSocketOptions& options) const;
+    // Returns an AF_UNIX stream listener for a broker-owned loopback TCP relay.
+    // metadata_json keeps bind_host/bind_port of that TCP endpoint. Validate the
+    // Unix descriptor and transport metadata before use; close() stops the relay.
     BrokeredSocketResult open_frontend_tcp_listener(const FrontendTcpListenerOptions& options = {}) const;
     BrokeredSocketResult open_can_socket(const CanSocketOptions& options) const;
     BrokeredFdResult open_device(const std::string& path, const DeviceOpenOptions& options = {}) const;

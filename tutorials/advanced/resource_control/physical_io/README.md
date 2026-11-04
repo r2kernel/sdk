@@ -5,7 +5,10 @@ I/O behavior.
 
 The tutorials are intentionally generated at test time because device paths and
 NIC names differ across targets. Use `make_packages.py` to create temporary
-managed packages for the current host:
+managed gateway packages for the current host. The UDP sender packages
+explicitly select `resources.sandbox.network: advisory` because these probes
+exercise direct Linux socket binding and routing. This exception is available
+only to gateways and permits general direct networking:
 
 ```bash
 python3 tutorials/advanced/resource_control/physical_io/bin/make_packages.py \

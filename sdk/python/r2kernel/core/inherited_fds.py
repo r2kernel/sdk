@@ -25,7 +25,8 @@ INHERITED_FDS_ENV = "R2KERNEL_INHERITED_FDS"
 _KIND_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}")
 _MIN_INHERITED_FD = 3
 _MAX_INHERITED_FD = 2**31 - 1  # a C int
-_FAMILIES = {"inet": socket.AF_INET, "inet6": socket.AF_INET6, "can": getattr(socket, "AF_CAN", 29)}
+_FAMILIES = {"inet": socket.AF_INET, "inet6": socket.AF_INET6, "can": getattr(socket, "AF_CAN", 29),
+             "unix": socket.AF_UNIX}
 _TYPES = {"stream": socket.SOCK_STREAM, "dgram": socket.SOCK_DGRAM, "raw": socket.SOCK_RAW}
 _SO_DOMAIN = getattr(socket, "SO_DOMAIN", 39)
 _SO_ACCEPTCONN = getattr(socket, "SO_ACCEPTCONN", 30)
@@ -93,7 +94,7 @@ def _expectation(expect: Mapping[str, Any]) -> tuple[int, int, bool, int | None]
 def inherited_socket(kind: str, expect: Mapping[str, Any]) -> int:
     """Return the validated inherited socket fd for ``kind``; ownership passes to the caller.
 
-    ``expect``: ``family`` (inet|inet6|can), ``type`` (stream|dgram|raw), ``listening`` (bool) and optional
+    ``expect``: ``family`` (inet|inet6|can|unix), ``type`` (stream|dgram|raw), ``listening`` (bool) and optional
     ``port`` (inet/inet6). Every call validates again. On failure the fd is neither closed nor modified; on
     success FD_CLOEXEC is set so the fd does not leak further unless the caller passes it on explicitly.
     """

@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 TUTORIALS = Path(__file__).resolve().parents[1]
 RESOURCE_CONTROL = TUTORIALS / "advanced" / "resource_control"
@@ -14,6 +15,13 @@ GENERATORS = {
     "brokered_can": ["--interface", "vcan0"],
     "brokered_network": ["--interface", "lo"],
 }
+
+for source in (TUTORIALS.parent / "sdk/python", TUTORIALS / "support/python"):
+    if str(source) not in sys.path:
+        sys.path.insert(0, str(source))
+
+import runtime  # noqa: E402
+from r2kernel.manifest.loader import load_subsystem_manifest  # noqa: E402
 
 
 def generated_pythonpath(manifest: Path) -> str:
@@ -40,6 +48,7 @@ class ResourceControlPackageTests(unittest.TestCase):
                 sdk = Path(generated_pythonpath(out / "package.yaml"))
                 self.assertTrue((sdk / "r2kernel").is_dir(), sdk)
                 self.assertTrue((out / "bin").is_dir())
+                self.assertEqual(load_subsystem_manifest(out / "subsystem.yaml").role, "gateway")
 
     def test_explicit_repo_root_without_sdk_is_refused(self) -> None:
         for name in GENERATORS:
@@ -48,6 +57,18 @@ class ResourceControlPackageTests(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn("sdk/python/r2kernel", result.stderr)
                 self.assertFalse((Path(directory) / "package").exists())
+
+
+class ManagedTutorialStartTests(unittest.TestCase):
+    def test_managed_component_start_needs_no_direct_network_probe(self) -> None:
+        for runtime_variable in ("R2KERNEL_PACKAGE_RUNTIME_DIR", "R2KERNEL_PACKAGE_INSTANCE_DIR"):
+            with self.subTest(variable=runtime_variable), patch.dict(
+                "os.environ", {runtime_variable: "/tmp/r2kernel-test-managed-start"}, clear=True
+            ), patch.object(runtime.socket, "socket", side_effect=AssertionError("direct socket")), patch.object(
+                runtime.urllib.request, "urlopen", side_effect=AssertionError("direct HTTP")
+            ):
+                runtime.ensure_control_running()
+                runtime.wait_for_control_ready()
 
 
 if __name__ == "__main__":

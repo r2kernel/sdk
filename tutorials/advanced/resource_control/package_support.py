@@ -11,6 +11,15 @@ def quote(value: str) -> str:
     return '"' + str(value).replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+def write_gateway_manifest(package_dir: Path, name: str) -> None:
+    """Mark hardware outlet probes as gateways, never as role-free packages."""
+    (package_dir / "subsystem.yaml").write_text(
+        "kind: r2kernel.subsystem\nversion: 1\nsubsystem:\n"
+        f"  name: {quote(name)}\n  role: gateway\n",
+        encoding="utf-8",
+    )
+
+
 def sdk_python_dir(script: str, repo_root: str | None) -> Path:
     """Python SDK source directory for the generated package's ``PYTHONPATH``.
 

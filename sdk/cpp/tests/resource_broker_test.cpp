@@ -11,12 +11,14 @@
 #include <filesystem>
 #include <functional>
 #include <iostream>
+#include <iterator>
 #include <stdexcept>
 #include <string>
 #include <thread>
 #include <utility>
 #include <vector>
 
+#include <netinet/in.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <sys/socket.h>
@@ -42,7 +44,7 @@ struct Fragment {
 
 class FakeBroker {
 public:
-    explicit FakeBroker(std::vector<Fragment> fragments)
+    explicit FakeBroker(std::vector<Fragment> fragments, int supplied_fd = -1, bool permit_empty = false)
         : path_(std::filesystem::temp_directory_path()
                 / ("r2kernel-cpp-broker-" + std::to_string(::getpid()) + "-"
                    + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".sock")) {
@@ -57,7 +59,12 @@ public:
         require(::socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, pair) == 0, "probe socketpair");
         probe_ = pair[0];
         transferred_ = pair[1];
-        thread_ = std::thread([this, fragments = std::move(fragments)] { serve(fragments); });
+        if (supplied_fd >= 0) {
+            ::close(transferred_);
+            transferred_ = ::dup(supplied_fd);
+            require(transferred_ >= 0, "duplicate supplied descriptor");
+        }
+        thread_ = std::thread([this, fragments = std::move(fragments), permit_empty] { serve(fragments, permit_empty); });
     }
     ~FakeBroker() {
         if (thread_.joinable()) thread_.join();
@@ -82,13 +89,16 @@ public:
     }
 
 private:
-    void serve(const std::vector<Fragment>& fragments) {
+    void serve(const std::vector<Fragment>& fragments, bool permit_empty) {
         try {
             const int connection = ::accept4(listener_, nullptr, nullptr, SOCK_CLOEXEC);
             require(connection >= 0, "broker accept");
             char buffer[8192];
             while (request_.find('\n') == std::string::npos) {
                 const auto count = ::recv(connection, buffer, sizeof(buffer), 0);
+                if (count == 0 && permit_empty && request_.empty()) {
+                    ::close(connection); ::close(transferred_); return;
+                }
                 require(count > 0, "client did not submit a complete request");
                 request_.append(buffer, static_cast<std::size_t>(count));
             }
@@ -127,6 +137,76 @@ private:
     std::string request_;
     std::string failure_;
 };
+
+int frontend_listener(int family) {
+    const int fd = ::socket(family, SOCK_STREAM | SOCK_CLOEXEC, 0);
+    require(fd >= 0, "frontend fixture socket");
+    if (family == AF_UNIX) {
+        sockaddr_un address {};
+        address.sun_family = AF_UNIX;
+        const std::string name = "r2k-sdk-frontend-" + std::to_string(::getpid()) + "-"
+            + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+        std::memcpy(address.sun_path + 1, name.data(), name.size());
+        require(::bind(fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == 0, "frontend Unix bind");
+    } else {
+        sockaddr_in address {};
+        address.sin_family = AF_INET;
+        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        require(::bind(fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == 0, "frontend TCP bind");
+    }
+    require(::listen(fd, 2) == 0, "frontend fixture listen");
+    return fd;
+}
+
+const std::string kFrontendMetadata =
+    "{\"domain\":\"unix\",\"transport\":\"unix_listener\",\"bind_host\":\"127.0.0.1\",\"bind_port\":18091}";
+
+void test_frontend_rejects_metadata_and_nonlistener_rights() {
+    for (const std::string& metadata : {
+            std::string("{}"),
+            std::string("{\"domain\":\"inet\",\"transport\":\"unix_listener\"}"),
+            std::string("{\"domain\":\"unix\",\"transport\":\"tcp_listener\"}"),
+            std::string("{\"domain\":\"unix\",\"transport\":\"unix_listener\",\"bind_host\":\"0.0.0.0\",\"bind_port\":18091}"),
+            std::string("{\"domain\":\"unix\",\"transport\":\"unix_listener\",\"bind_host\":\"127.0.0.1\",\"bind_port\":true}"),
+            std::string("{\"domain\":\"unix\",\"transport\":\"unix_listener\",\"bind_host\":\"127.0.0.1\",\"bind_port\":\"18091\"}"),
+            std::string("{\"domain\":\"unix\",\"transport\":\"unix_listener\",\"bind_host\":\"127.0.0.1\",\"bind_port\":1.5}"),
+            std::string("{\"domain\":\"unix\",\"transport\":\"unix_listener\",\"bind_host\":\"127.0.0.1\",\"bind_port\":0}"),
+            std::string("{\"domain\":\"unix\",\"transport\":\"unix_listener\",\"bind_host\":\"127.0.0.1\",\"bind_port\":65536}"),
+            kFrontendMetadata}) {
+        FakeBroker broker({{"{\"ok\":true,\"result\":" + metadata + "}\n", 1}});
+        ResourceBrokerClient client("frontend-test", broker.path());
+        bool rejected = false;
+        try { (void)client.open_frontend_tcp_listener(); }
+        catch (const std::runtime_error&) { rejected = true; }
+        (void)broker.finish();
+        require(rejected, "frontend rejects invalid metadata or a connected nonlistener");
+        require(broker.probe_closed(), "frontend rejection closes its received descriptor");
+    }
+}
+
+void test_frontend_rejects_tcp_datagram_and_file_descriptors() {
+    const int tcp = frontend_listener(AF_INET);
+    const int datagram = ::socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
+    const int file = ::open("/dev/null", O_RDONLY | O_CLOEXEC);
+    require(datagram >= 0 && file >= 0, "frontend mismatch fixtures");
+    const auto count = [] {
+        return std::distance(std::filesystem::directory_iterator("/proc/self/fd"), std::filesystem::directory_iterator());
+    };
+    for (int fd : {tcp, datagram, file}) {
+        const auto before = count();
+        {
+            FakeBroker broker({{"{\"ok\":true,\"result\":" + kFrontendMetadata + "}\n", 1}}, fd);
+            ResourceBrokerClient client("frontend-test", broker.path());
+            bool rejected = false;
+            try { (void)client.open_frontend_tcp_listener(); }
+            catch (const std::runtime_error&) { rejected = true; }
+            (void)broker.finish();
+            require(rejected, "frontend descriptor identity is checked");
+        }
+        require(count() == before, "frontend descriptor mismatch closes the received right");
+        ::close(fd);
+    }
+}
 
 void test_fragmented_success_transfers_one_usable_noninheritable_fd(int rights_fragment) {
     FakeBroker broker({{"{\"ok\":t", rights_fragment == 0 ? 1 : 0},
@@ -261,17 +341,84 @@ void test_environment_lease_and_socket() {
     require(ResourceBrokerClient().socket_path() == r2kernel::core::kDefaultResourceSocket, "default broker socket");
     // R2KernelClient's open_* pass-throughs build exactly this client from the
     // environment (the R2KernelClient itself needs a running Control).
-    FakeBroker broker({{"{\"ok\":true,\"result\":{\"kind\":\"api\"}}\n", 1}});
+    const int frontend = frontend_listener(AF_UNIX);
+    FakeBroker broker({{"{\"ok\":true,\"result\":" + kFrontendMetadata + "}\n", 1}}, frontend);
     ::setenv(r2kernel::core::kResourceServiceSocketEnv, broker.path().c_str(), 1);
     const ResourceBrokerClient from_env;
     require(from_env.lease_id() == "env-lease" && from_env.socket_path() == broker.path(), "environment lease and socket");
     auto listener = from_env.open_frontend_tcp_listener();
     require(broker.finish().find("\"lease_id\":\"env-lease\"") != std::string::npos, "request uses the env lease");
-    require(listener.socket >= 0 && listener.metadata_json == "{\"kind\":\"api\"}", "frontend listener result");
+    require(listener.socket >= 0 && listener.metadata_json == kFrontendMetadata, "frontend Unix listener result");
+    int family = 0;
+    socklen_t length = sizeof(family);
+    require(::getsockopt(listener.socket, SOL_SOCKET, SO_DOMAIN, &family, &length) == 0 && family == AF_UNIX,
+            "frontend result owns a Unix listener");
     listener.close();
-    require(broker.probe_closed(), "the result owns the descriptor");
+    pollfd frontend_poll {frontend, POLLHUP, 0};
+    require(::poll(&frontend_poll, 1, 1000) == 1 && (frontend_poll.revents & POLLHUP) != 0,
+            "frontend result close shuts down the broker's listener copy");
+    ::close(frontend);
     ::unsetenv(r2kernel::core::kResourceLeaseIdEnv);
     ::unsetenv(r2kernel::core::kResourceServiceSocketEnv);
+}
+
+void test_approved_stream_authentication_and_confinement() {
+    const std::string prefix = "{\"ok\":true,\"result\":{\"kind\":\"approved_tcp_stream\",\"lease_id\":\"lease1\",\"grant_id\":\"grant1\",\"execution_id\":";
+    const std::string response = prefix + "\"" + std::string(32, '1') + "\"}}\n";
+    FakeBroker broker({{response, 1}}, -1, true);
+    ResourceBrokerClient client("lease1", broker.path());
+    if (::geteuid() != 0) {
+        bool rejected = false;
+        try { (void)client.open_approved_tcp_stream("grant1"); }
+        catch (const std::runtime_error& error) { rejected = std::string(error.what()).find("root-owned") != std::string::npos; }
+        require(rejected, "approved streams authenticate root broker before submission");
+        require(broker.finish().empty(), "untrusted broker receives no grant identifier");
+        require(broker.probe_closed(), "untrusted broker retains no app stream");
+    } else {
+        auto stream = client.open_approved_tcp_stream("grant1");
+        int family = 0; socklen_t length = sizeof(family);
+        require(::getsockopt(stream.socket, SOL_SOCKET, SO_DOMAIN, &family, &length) == 0 && family == AF_UNIX,
+                "approved stream is AF_UNIX");
+        require(broker.finish() == "{\"op\":\"open_approved_tcp_stream\",\"lease_id\":\"lease1\",\"grant_id\":\"grant1\"}\n", "exact approved operation");
+        stream.close(); require(broker.probe_closed(), "approved stream descriptor closes");
+        for (const std::string wrong : {"{\"ok\":true,\"result\":{\"kind\":\"tcp_socket\",\"lease_id\":\"lease1\",\"grant_id\":\"grant1\"}}\n",
+                                        "{\"ok\":true,\"result\":{\"kind\":\"approved_tcp_stream\",\"lease_id\":\"foreign\",\"grant_id\":\"grant1\"}}\n"}) {
+            FakeBroker hostile({{wrong,1}}); ResourceBrokerClient target("lease1", hostile.path());
+            bool rejected=false;try {(void)target.open_approved_tcp_stream("grant1");}catch(const std::runtime_error&){rejected=true;}
+            (void)hostile.finish(); require(rejected && hostile.probe_closed(), "wrong approved metadata closes FD");
+        }
+        for (const std::string& nonce : std::vector<std::string>{"null", "123", "\"\"", "\"" + std::string(32, 'A') + "\"", "\"" + std::string(31, '1') + "\""}) {
+            FakeBroker hostile({{prefix + nonce + "}}\n", 1}});
+            ResourceBrokerClient target("lease1", hostile.path());
+            bool rejected = false;
+            try { (void)target.open_approved_tcp_stream("grant1"); } catch (const std::runtime_error&) { rejected = true; }
+            (void)hostile.finish();
+            require(rejected && hostile.probe_closed(), "invalid execution identity closes FD");
+        }
+        for (int kind : {SOCK_STREAM, SOCK_DGRAM}) {
+            int supplied = ::socket(AF_UNIX, kind | SOCK_CLOEXEC, 0);
+            require(supplied >= 0, "unconnected socket");
+            FakeBroker hostile({{response, 1}}, supplied);
+            ResourceBrokerClient target("lease1", hostile.path());
+            bool rejected = false;
+            try { (void)target.open_approved_tcp_stream("grant1"); } catch (const std::runtime_error&) { rejected = true; }
+            (void)hostile.finish();
+            require(rejected, "unconnected or datagram right refused");
+            ::close(supplied);
+        }
+        const int supplied_listener = frontend_listener(AF_UNIX);
+        FakeBroker hostile_listener({{response, 1}}, supplied_listener);
+        ResourceBrokerClient target_listener("lease1", hostile_listener.path());
+        bool listener_rejected = false;
+        try { (void)target_listener.open_approved_tcp_stream("grant1"); } catch (const std::runtime_error&) { listener_rejected = true; }
+        (void)hostile_listener.finish();
+        require(listener_rejected, "listener right refused as an app stream");
+        ::close(supplied_listener);
+        FakeBroker unsupported({{"{\"ok\":false,\"error\":\"unknown variant open_approved_tcp_stream\"}\n",0}});
+        ResourceBrokerClient old_runtime("lease1",unsupported.path());
+        bool rejected=false;try{(void)old_runtime.open_approved_tcp_stream("grant1");}catch(const std::runtime_error&){rejected=true;}
+        require(rejected && unsupported.finish().find("open_approved_tcp_stream")!=std::string::npos, "unsupported operation fails closed");
+    }
 }
 
 }  // namespace
@@ -283,6 +430,9 @@ int main() {
         test_rejections();
         test_refusal_text_and_request_shapes();
         test_environment_lease_and_socket();
+        test_approved_stream_authentication_and_confinement();
+        test_frontend_rejects_metadata_and_nonlistener_rights();
+        test_frontend_rejects_tcp_datagram_and_file_descriptors();
     } catch (const std::exception& error) {
         std::cerr << "resource_broker_test failed: " << error.what() << '\n';
         return 1;

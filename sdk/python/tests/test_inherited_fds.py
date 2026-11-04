@@ -130,7 +130,8 @@ class InheritedFdTests(unittest.TestCase):
             self.assertEqual((caught.exception.step, caught.exception.kind), ("env_invalid", "<encode>"))
 
     def test_invalid_expectation_is_a_caller_error(self) -> None:
-        for expect in ({"family": "unix", "type": "stream", "listening": False},
+        for expect in ({"family": "other", "type": "stream", "listening": False},
+                       {"family": "unix", "type": "stream", "listening": True, "port": 18091},
                        {"family": "inet", "type": "dgram", "listening": True},
                        {"family": "can", "type": "raw", "listening": False, "port": 1},
                        {"family": "inet", "type": "stream"},
@@ -161,6 +162,43 @@ class InheritedFdTests(unittest.TestCase):
         self.assertNotEqual(wrong_port.returncode, 0)
         self.assertIn(f"inherited fd frontend.api: port_mismatch: fd {self.fd} is bound to port {self.port}",
                       wrong_port.stderr)
+
+    def test_unix_frontend_listener_pass_fds_round_trip(self) -> None:
+        with tempfile.TemporaryDirectory() as directory, socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as listener:
+            endpoint = os.path.join(directory, "frontend.sock")
+            listener.bind(endpoint)
+            listener.listen(1)
+            script = textwrap.dedent("""
+                import fcntl, json, socket
+                from r2kernel.core.inherited_fds import inherited_socket
+                fd = inherited_socket("frontend.api", {"family":"unix", "type":"stream", "listening":True})
+                cloexec = bool(fcntl.fcntl(fd, fcntl.F_GETFD) & fcntl.FD_CLOEXEC)
+                with socket.socket(fileno=fd) as listener:
+                    listener.settimeout(3)
+                    connection, _ = listener.accept()
+                    with connection:
+                        connection.settimeout(3)
+                        connection.sendall(b"ACK:" + connection.recv(16))
+                print(json.dumps({"fd":fd, "cloexec":cloexec}))
+                """)
+            env = dict(os.environ)
+            env[INHERITED_FDS_ENV] = encode_inherited_fds({"frontend.api": listener.fileno()})
+            env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(SDK_ROOT), env.get("PYTHONPATH")]))
+            child = subprocess.Popen([sys.executable, "-c", script], env=env, pass_fds=(listener.fileno(),),
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            try:
+                with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+                    connection.settimeout(3)
+                    connection.connect(endpoint)
+                    connection.sendall(b"frontend")
+                    self.assertEqual(connection.recv(32), b"ACK:frontend")
+                stdout, stderr = child.communicate(timeout=5)
+                self.assertEqual(child.returncode, 0, stderr)
+                self.assertEqual(json.loads(stdout), {"fd": listener.fileno(), "cloexec": True})
+            finally:
+                if child.poll() is None:
+                    child.kill()
+                    child.communicate(timeout=5)
 
 
 if __name__ == "__main__":

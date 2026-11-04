@@ -74,9 +74,9 @@ class SandboxDenialTests(unittest.TestCase):
                 patch.object(sandbox.socket, "socket", _seccomp_like(socket.AF_INET, socket.AF_INET6)):
             (message,) = sandbox.sandbox_socket_denials()
             self.assertEqual(message, (
-                "socket(AF_INET/AF_INET6) denied by resources.sandbox.network=brokered; request a brokered "
-                "socket (ResourceBrokerClient.open_tcp_socket, open_udp_socket or open_frontend_tcp_listener) "
-                "or use the leader pass_fds pattern (R2KERNEL_INHERITED_FDS)"))
+                "socket(AF_INET/AF_INET6) denied by resources.sandbox.network=brokered; request only sockets "
+                "authorized by this package's grants, use a declared frontend listener or R2Kernel interfaces, "
+                "or validate a leader-passed descriptor (R2KERNEL_INHERITED_FDS)"))
             wrapped = RuntimeError("readiness failed")
             wrapped.__cause__ = _caught(_socket_eperm)
             self.assertEqual(sandbox.explain_permission_error(wrapped), message)
@@ -92,6 +92,13 @@ class SandboxDenialTests(unittest.TestCase):
     def test_env_without_actual_denial_is_not_reported(self) -> None:
         with patch.dict(os.environ, {sandbox.SANDBOX_NETWORK_ENV: "brokered"}, clear=True):
             self.assertEqual(sandbox.sandbox_socket_denials(), [])
+
+    def test_network_sandbox_also_explains_can_without_separate_can_setting(self) -> None:
+        can = getattr(socket, "AF_CAN", 29)
+        with patch.dict(os.environ, {sandbox.SANDBOX_NETWORK_ENV: "brokered"}, clear=True), \
+                patch.object(sandbox.socket, "socket", _seccomp_like(can)):
+            (message,) = sandbox.sandbox_socket_denials()
+            self.assertTrue(message.startswith("socket(AF_CAN) denied by resources.sandbox.network=brokered;"))
 
 
 class _Lifecycle(_LifecycleMixin):

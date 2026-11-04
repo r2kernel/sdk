@@ -20,23 +20,26 @@ bool brokered(const char* variable) {
     return value != nullptr && std::strcmp(value, "brokered") == 0;
 }
 constexpr char kAlternatives[] =
-    "; request a brokered socket from r2kernel-resourced or use a socket the package leader passed "
-    "through R2KERNEL_INHERITED_FDS (r2kernel::inherited_socket)";
+    "; request only sockets authorized by this package's grants, use a declared frontend listener or "
+    "R2Kernel interfaces, or validate a leader-passed descriptor (R2KERNEL_INHERITED_FDS)";
 }  // namespace
 
 std::optional<std::string> sandbox_socket_denial(int family, int error_number) {
 #if defined(__linux__)
     if (error_number != EPERM) return std::nullopt;
-    const char* name = family == AF_INET ? "AF_INET" : family == AF_INET6 ? "AF_INET6"
-        : family == AF_PACKET ? "AF_PACKET" : family == AF_CAN ? "AF_CAN" : nullptr;
-    if (name == nullptr) return std::nullopt;
+    if (family == AF_UNIX) return std::nullopt;
+    const char* known = family == AF_INET ? "AF_INET" : family == AF_INET6 ? "AF_INET6"
+        : family == AF_PACKET ? "AF_PACKET" : family == AF_CAN ? "AF_CAN"
+        : family == AF_VSOCK ? "AF_VSOCK" : family == AF_BLUETOOTH ? "AF_BLUETOOTH" : nullptr;
+    const std::string name = known != nullptr ? known : "family=" + std::to_string(family);
+    if (brokered(kSandboxNetworkEnv))
+        return "socket(" + name + ") denied by resources.sandbox.network=brokered" + kAlternatives;
     if (family == AF_CAN) {
         if (!brokered(kSandboxCanEnv)) return std::nullopt;
-        return std::string("socket(AF_CAN) denied by the brokered CAN sandbox (R2KERNEL_SANDBOX_CAN=brokered)")
+        return std::string("socket(AF_CAN) denied by resources.sandbox.can=brokered")
             + kAlternatives;
     }
-    if (!brokered(kSandboxNetworkEnv)) return std::nullopt;
-    return std::string("socket(") + name + ") denied by resources.sandbox.network=brokered" + kAlternatives;
+    return std::nullopt;
 #else
     (void)family;
     (void)error_number;

@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from package_support import prepare_package, quote, sdk_python_dir  # noqa: E402
+from package_support import prepare_package, quote, sdk_python_dir, write_gateway_manifest  # noqa: E402
 
 
 def main() -> int:
@@ -54,10 +54,12 @@ def main() -> int:
             "    can:",
             f"      - {quote(args.interface)}",
             "  sandbox:",
+            "    network: brokered",
             "    can: brokered",
         ]
     )
     (package_dir / "package.yaml").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    write_gateway_manifest(package_dir, "brokered-can-probe")
     print(package_dir)
     return 0
 

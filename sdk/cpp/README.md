@@ -542,6 +542,15 @@ local port, sets `FD_CLOEXEC` and returns it. Every mismatch throws
 `r2kernel::InheritedFdError` with `step()` naming the failed check; the helper
 never falls back to a broker request and never closes the descriptor on failure.
 
+`open_frontend_tcp_listener()` returns an AF_UNIX stream listener for a broker-owned
+loopback TCP relay. The result metadata has `domain: unix`, `transport: unix_listener`
+and `bind_host`/`bind_port` for the TCP endpoint. The SDK validates both the metadata
+and descriptor. Use `InheritedSocketFamily::unix_socket`, stream and listening=true
+when passing it to a child; Unix expectations cannot include a port. Call the
+broker result's `close()` to shut down the relay. A child holding the inherited
+listener must call `shutdown(fd, SHUT_RDWR)` before `close(fd)`; closing only one
+descriptor leaves the broker's copy alive until lease cleanup.
+
 ## Build
 
 Install native build tools first:
@@ -664,3 +673,15 @@ caller receives `ok = false`, `error_code = "procedure_transport_failed"`, and t
 provider diagnostic in `error_message`; failure payloads are not decoded using
 the success schema. Timed replies retain their existing response metadata and
 application status contract. No new envelope or public API/ABI is introduced.
+
+## Approved app outbound streams
+
+`ResourceBrokerClient::open_approved_tcp_stream` opens one root-approved TCP
+endpoint for the current broker-created app execution. The app receives a
+connected AF_UNIX stream, while the broker retains the TCP socket and can
+revoke every duplicate of the stream. The SDK validates the root broker,
+lease/grant identifiers, execution ID and actual connected stream descriptor.
+It does not fall back to direct sockets or another role on older runtimes.
+
+Root provisioning, renewal, revocation, snapshot access and application TLS/API
+authentication are described in [Approved App Connections](../../../docs/docs/operate/app-outbound-connections.md).

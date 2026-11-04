@@ -8,6 +8,7 @@
 #include "json_value.hpp"
 
 #include <chrono>
+#include <algorithm>
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
@@ -48,8 +49,8 @@ using Clock = std::chrono::steady_clock;
 
 class ResourceRequest {
 public:
-    ResourceRequest(const std::string& socket_path, std::string line)
-        : socket_path_(socket_path), line_(std::move(line)), deadline_(Clock::now() + kResourceRequestTimeout) {}
+    ResourceRequest(const std::string& socket_path, std::string line, bool require_root)
+        : socket_path_(socket_path), line_(std::move(line)), deadline_(Clock::now() + kResourceRequestTimeout), require_root_(require_root) {}
 
     ~ResourceRequest() {
         for (const int fd : fds_) ::close(fd);
@@ -61,6 +62,12 @@ public:
     // One submission; returns the broker's result object and the descriptor.
     std::pair<JsonValue, int> run() {
         connect_broker();
+        if (require_root_) {
+            ucred credentials {};
+            socklen_t length = sizeof(credentials);
+            if (::getsockopt(socket_, SOL_SOCKET, SO_PEERCRED, &credentials, &length) != 0 || credentials.uid != 0)
+                throw std::runtime_error("Approved streams require a root-owned broker process");
+        }
         send_line();
         std::string response;
         for (;;) {
@@ -199,19 +206,21 @@ private:
     const std::string& socket_path_;
     const std::string line_;
     const Clock::time_point deadline_;
+    bool require_root_;
     int socket_ = -1;
     std::vector<int> fds_;
 };
 #endif
 
-std::pair<std::string, int> request_fd(const std::string& socket_path, const std::string& request_json) {
+std::pair<std::string, int> request_fd(const std::string& socket_path, const std::string& request_json, bool require_root = false) {
 #if defined(__linux__)
-    ResourceRequest request(socket_path, request_json + "\n");
+    ResourceRequest request(socket_path, request_json + "\n", require_root);
     auto [metadata, fd] = request.run();
     return {metadata.dump(), fd};
 #else
     (void)socket_path;
     (void)request_json;
+    (void)require_root;
     throw std::runtime_error("R2Kernel resource broker requests require Linux Unix descriptor passing");
 #endif
 }
@@ -223,6 +232,39 @@ BrokeredSocketResult socket_result(std::pair<std::string, int> brokered) {
     return result;
 }
 
+BrokeredSocketResult frontend_socket_result(std::pair<std::string, int> brokered) {
+    try {
+        const auto metadata = r2kernel::sdk_detail::parse_json(brokered.first);
+        if (!metadata.member_equals("domain", "unix") || !metadata.member_equals("transport", "unix_listener"))
+            throw std::runtime_error("R2Kernel frontend response must describe a Unix listener relay");
+        const auto* port = metadata.find("bind_port");
+        int port_number = 0;
+        if (port != nullptr && port->is_number() && !port->text().empty() && port->text().size() <= 5
+                && port->text().find_first_not_of("0123456789") == std::string::npos) {
+            for (char digit : port->text()) port_number = port_number * 10 + digit - '0';
+        }
+        if ((!metadata.member_equals("bind_host", "127.0.0.1") && !metadata.member_equals("bind_host", "::1"))
+                || port_number < 1 || port_number > 65535)
+            throw std::runtime_error("R2Kernel frontend response has an invalid loopback TCP endpoint");
+#if defined(__linux__)
+        const auto option = [&](int name, int expected) {
+            int actual = 0;
+            socklen_t length = sizeof(actual);
+            return ::getsockopt(brokered.second, SOL_SOCKET, name, &actual, &length) == 0
+                && length == sizeof(actual) && actual == expected;
+        };
+        if (!option(SO_DOMAIN, AF_UNIX) || !option(SO_TYPE, SOCK_STREAM) || !option(SO_ACCEPTCONN, 1))
+            throw std::runtime_error("R2Kernel frontend descriptor must be a listening Unix stream socket");
+#endif
+        return socket_result(std::move(brokered));
+    } catch (...) {
+#if defined(__linux__)
+        ::close(brokered.second);
+#endif
+        throw;
+    }
+}
+
 void close_descriptor(int& fd) noexcept {
 #if defined(__linux__)
     if (fd >= 0) ::close(fd);
@@ -232,7 +274,19 @@ void close_descriptor(int& fd) noexcept {
 
 }  // namespace
 
-void BrokeredSocketResult::close() noexcept { close_descriptor(socket); }
+void BrokeredSocketResult::close() noexcept {
+#if defined(__linux__)
+    if (socket >= 0) {
+        try {
+            if (r2kernel::sdk_detail::parse_json(metadata_json).member_equals("transport", "unix_listener"))
+                (void)::shutdown(socket, SHUT_RDWR);
+        } catch (...) {
+            // Public metadata text may have been changed by the caller; still release the FD.
+        }
+    }
+#endif
+    close_descriptor(socket);
+}
 void BrokeredFdResult::close() noexcept { close_descriptor(fd); }
 
 ResourceBrokerClient::ResourceBrokerClient(std::string lease_id, std::string socket_path)
@@ -251,6 +305,39 @@ BrokeredSocketResult ResourceBrokerClient::open_udp_socket(const UdpSocketOption
             + ",\"bind_port\":" + std::to_string(options.bind_port) + "}"));
 }
 
+BrokeredSocketResult ResourceBrokerClient::open_approved_tcp_stream(const std::string& grant_id) const {
+    if (grant_id.empty() || grant_id.size() > 256)
+        throw std::runtime_error("grant_id must be a nonempty identifier of at most 256 bytes");
+    auto result = socket_result(request_fd(socket_path_,
+        "{\"op\":\"open_approved_tcp_stream\",\"lease_id\":" + quoted(lease_id_)
+            + ",\"grant_id\":" + quoted(grant_id) + "}", true));
+    try {
+#if defined(__linux__)
+        const auto metadata = r2kernel::sdk_detail::parse_json(result.metadata_json);
+        const auto execution = metadata.string_member("execution_id");
+        const bool valid_execution = execution && execution->size() == 32
+            && std::all_of(execution->begin(), execution->end(), [](unsigned char byte) {
+                return (byte >= '0' && byte <= '9') || (byte >= 'a' && byte <= 'f');
+            });
+        const auto option = [&](int name, int expected) {
+            int actual = 0;
+            socklen_t length = sizeof(actual);
+            return ::getsockopt(result.socket, SOL_SOCKET, name, &actual, &length) == 0
+                && length == sizeof(actual) && actual == expected;
+        };
+        sockaddr_storage peer {};
+        socklen_t peer_length = sizeof(peer);
+        if (!option(SO_DOMAIN, AF_UNIX) || !option(SO_TYPE, SOCK_STREAM) || !option(SO_ACCEPTCONN, 0)
+            || ::getpeername(result.socket, reinterpret_cast<sockaddr*>(&peer), &peer_length) != 0
+            || peer_length < sizeof(peer.ss_family) || peer.ss_family != AF_UNIX || !valid_execution
+            || !metadata.member_equals("kind", "approved_tcp_stream")
+            || !metadata.member_equals("lease_id", lease_id_) || !metadata.member_equals("grant_id", grant_id))
+            throw std::runtime_error("Invalid approved TCP stream descriptor or authority metadata");
+#endif
+        return result;
+    } catch (...) { result.close(); throw; }
+}
+
 BrokeredSocketResult ResourceBrokerClient::open_tcp_socket(const TcpSocketOptions& options) const {
     return socket_result(request_fd(socket_path_,
         "{\"op\":\"open_tcp_socket\",\"lease_id\":" + quoted(lease_id_) + ",\"interface\":"
@@ -262,7 +349,7 @@ BrokeredSocketResult ResourceBrokerClient::open_tcp_socket(const TcpSocketOption
 }
 
 BrokeredSocketResult ResourceBrokerClient::open_frontend_tcp_listener(const FrontendTcpListenerOptions& options) const {
-    return socket_result(request_fd(socket_path_,
+    return frontend_socket_result(request_fd(socket_path_,
         "{\"op\":\"open_frontend_tcp_listener\",\"lease_id\":" + quoted(lease_id_) + ",\"kind\":"
             + quoted(options.kind) + ",\"bind_host\":" + quoted(options.bind_host.value_or(""))
             + ",\"bind_port\":" + std::to_string(options.bind_port.value_or(0)) + ",\"backlog\":"
@@ -296,6 +383,10 @@ int ResourceBrokerClient::inherited_fd(const std::string& kind, const InheritedS
 // the environment, as the Python SDK's R2KernelClient.open_* do.
 BrokeredSocketResult R2KernelClient::open_udp_socket(const UdpSocketOptions& options) const {
     return ResourceBrokerClient().open_udp_socket(options);
+}
+
+BrokeredSocketResult R2KernelClient::open_approved_tcp_stream(const std::string& grant_id) const {
+    return ResourceBrokerClient().open_approved_tcp_stream(grant_id);
 }
 
 BrokeredSocketResult R2KernelClient::open_tcp_socket(const TcpSocketOptions& options) const {

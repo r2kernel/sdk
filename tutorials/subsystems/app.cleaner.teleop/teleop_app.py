@@ -66,9 +66,10 @@ except ModuleNotFoundError:
 class _BrokeredFrontendServer(socketserver.ThreadingMixIn, socketserver.BaseServer):
     daemon_threads = True
 
-    def __init__(self, server_socket: socket.socket, handler: type[BaseHTTPRequestHandler]) -> None:
+    def __init__(self, server_socket: socket.socket, handler: type[BaseHTTPRequestHandler],
+                 metadata: dict[str, Any]) -> None:
         self.socket = server_socket
-        self.server_address = server_socket.getsockname()
+        self.server_address = (str(metadata["bind_host"]), int(metadata["bind_port"]))
         super().__init__(self.server_address, handler)
         host, port = self.server_address[:2]
         self.server_name = str(host)
@@ -78,10 +79,19 @@ class _BrokeredFrontendServer(socketserver.ThreadingMixIn, socketserver.BaseServ
         return self.socket.fileno()
 
     def get_request(self) -> tuple[socket.socket, Any]:
-        return self.socket.accept()
+        connection, address = self.socket.accept()
+        # Unix peers do not supply the IP-address tuple expected by HTTP handlers.
+        if not isinstance(address, tuple):
+            address = (self.server_name, 0)
+        return connection, address
 
     def server_close(self) -> None:
-        self.socket.close()
+        try:
+            self.socket.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+        finally:
+            self.socket.close()
 
     def close_request(self, request: socket.socket) -> None:
         request.close()
@@ -221,15 +231,18 @@ class TeleopCleanerApp(CleanerApplicationBase):
         if ResourceBrokerClient is None:
             self.logger.warning("Frontend", "r2kernel.core.ResourceBrokerClient is unavailable; app frontend API disabled")
             return
+        brokered = None
         try:
             brokered = ResourceBrokerClient().open_frontend_tcp_listener(kind="api")
-            server = _BrokeredFrontendServer(brokered.socket, _frontend_handler(self))
+            server = _BrokeredFrontendServer(brokered.socket, _frontend_handler(self), brokered.metadata)
             thread = threading.Thread(target=server.serve_forever, name=f"{self.name}-frontend-api", daemon=True)
             thread.start()
             self._frontend_server = server
             self._frontend_thread = thread
             self.logger.info("Frontend", f"teleop app frontend API listening on {server.server_address}")
         except Exception as exc:
+            if brokered is not None:
+                brokered.close()
             self.logger.error("Frontend", f"failed to start teleop app frontend API: {exc}")
 
     def _stop_frontend_api(self) -> None:

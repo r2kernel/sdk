@@ -33,7 +33,7 @@ private:
     std::string kind_;
 };
 
-enum class InheritedSocketFamily { inet, inet6, can };
+enum class InheritedSocketFamily { inet, inet6, can, unix_socket };
 enum class InheritedSocketType { stream, dgram, raw };
 
 struct InheritedSocketExpectation {

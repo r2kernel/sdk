@@ -254,21 +254,33 @@ A leader that received brokered sockets can pass them to its child processes
 `env[INHERITED_FDS_ENV] = encode_inherited_fds({"frontend.api": fd})` with
 `subprocess.Popen(..., env=env, pass_fds=(fd,))`. The child obtains the socket with
 `inherited_socket(kind, expect)` (also `ResourceBrokerClient.inherited_fd`), where
-`expect` gives `family` (`inet`, `inet6`, `can`), `type` (`stream`, `dgram`, `raw`),
+`expect` gives `family` (`inet`, `inet6`, `can`, `unix`), `type` (`stream`, `dgram`, `raw`),
 `listening` and optionally `port`. It checks the environment value, that the fd is a
 socket, its family, type, listening state and bound port, in that order. A mismatch raises
 `InheritedFdError` naming the failed step and leaves the fd unchanged; there is no broker
 fallback. On success the fd gets `FD_CLOEXEC` and is returned to the caller.
 
+`open_frontend_tcp_listener()` returns a Unix stream listener. The broker keeps the
+loopback TCP listener and relays its connections to this Unix listener. Its metadata
+has `domain: unix`, `transport: unix_listener`, and `bind_host`/`bind_port` for the
+TCP endpoint. The SDK checks the metadata and descriptor before returning it. A child
+uses `{"family": "unix", "type": "stream", "listening": True}` without `port`.
+Use the result's `close()` method to stop the frontend relay. A child holding the
+inherited listener must call `shutdown(socket.SHUT_RDWR)` before closing it. Closing
+only one descriptor leaves the broker's listener copy alive until lease cleanup.
+
 ### Brokered sandbox and start diagnostics
 
 With `resources.sandbox.network: brokered` the package's whole process tree cannot
-create AF_INET/AF_INET6 sockets (`EPERM`); local Control and Event use Unix sockets and
+create sockets outside AF_UNIX (`EPERM`), including AF_INET/AF_INET6 and AF_CAN;
+local Control and Event use Unix sockets and
 are unaffected. When a lifecycle hook fails with an `EPERM` raised by creating a socket
 (`socket.socket`) while `R2KERNEL_SANDBOX_NETWORK=brokered` (or
 `R2KERNEL_SANDBOX_CAN=brokered`) is set and the process is actually denied, the SDK logs
-which socket families are denied and the alternatives: a brokered socket or the leader
-pass_fds pattern. An `EPERM` from any other call is not explained this way. A hook that
+which socket families are denied and the alternatives permitted by the package's
+grants: declared frontend listeners, R2Kernel interfaces or leader-passed descriptors.
+Generic TCP/UDP/CAN broker requests still require their own resource grants.
+An `EPERM` from any other call is not explained this way. A hook that
 returns `False` is logged as `"<Phase> failed: <phase> hook returned False (no exception)"`,
 followed by `"; last warning or error logged during <phase>: ..."` when that hook's own
 thread logged one while it ran. A refused transition (pause, resume, stop, fault, degrade,
@@ -358,3 +370,15 @@ The SDK reads these variables; launchers set the deployment-specific ones.
 | `R2KERNEL_CONTRACT_POLICY` | `strict` | Runtime contract metadata check: `strict`, `warn` or `off`. |
 | `R2KERNEL_LOG_DIR` | `<prefix>/log`, else `~/.r2kernel/log` | Library log directory. |
 | `R2KERNEL_FORCE_PYTHON` | off | `1` selects the pure-Python Event, topic-buffer and lock implementations instead of the native core (tests and diagnostics). |
+
+## Approved app outbound streams
+
+`ResourceBrokerClient.open_approved_tcp_stream` opens one root-approved TCP
+endpoint for the current broker-created app execution. The app receives a
+connected AF_UNIX stream, while the broker retains the TCP socket and can
+revoke every duplicate of the stream. The SDK validates the root broker,
+lease/grant identifiers, execution ID and actual connected stream descriptor.
+It does not fall back to direct sockets or another role on older runtimes.
+
+Root provisioning, renewal, revocation, snapshot access and application TLS/API
+authentication are described in [Approved App Connections](../../../docs/docs/operate/app-outbound-connections.md).

@@ -18,6 +18,7 @@
 #include <netinet/in.h>
 #include <spawn.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -49,6 +50,18 @@ int bound_port(int fd) {
     socklen_t length = sizeof(address);
     require(::getsockname(fd, reinterpret_cast<sockaddr*>(&address), &length) == 0, "getsockname");
     return ntohs(address.sin_port);
+}
+
+int unix_listener() {
+    const int fd = ::socket(AF_UNIX, SOCK_STREAM, 0);
+    require(fd >= 3, "Unix listener socket");
+    sockaddr_un address {};
+    address.sun_family = AF_UNIX;
+    const std::string name = "r2k-inherited-" + std::to_string(::getpid()) + "-" + std::to_string(fd);
+    std::memcpy(address.sun_path + 1, name.data(), name.size());
+    require(::bind(fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) == 0, "Unix listener bind");
+    require(::listen(fd, 2) == 0, "Unix listener listen");
+    return fd;
 }
 
 void set_env(const std::string& value) { ::setenv(r2kernel::kInheritedFdsEnv, value.c_str(), 1); }
@@ -125,6 +138,10 @@ void scenarios() {
     try { (void)r2kernel::inherited_socket("frontend.api", expect(InheritedSocketFamily::inet, InheritedSocketType::dgram, true)); }
     catch (const std::invalid_argument&) { invalid_expectation = true; }
     require(invalid_expectation, "listening without stream must be rejected as an invalid expectation");
+    invalid_expectation = false;
+    try { (void)r2kernel::inherited_socket("frontend.api", expect(InheritedSocketFamily::unix_socket, InheritedSocketType::stream, true, 1)); }
+    catch (const std::invalid_argument&) { invalid_expectation = true; }
+    require(invalid_expectation, "Unix listener expectation must not carry a TCP port");
 
     // Success: same descriptor, FD_CLOEXEC set, nothing else changed.
     const int status_flags = ::fcntl(listener, F_GETFL);
@@ -143,9 +160,9 @@ void scenarios() {
 }
 
 // Leader encodes and keeps the listener open across exec; the child validates it.
-void child_round_trip(const char* self) {
-    const int listener = tcp_socket(true);
-    const int port = bound_port(listener);
+void child_round_trip(const char* self, bool unix_frontend = false) {
+    const int listener = unix_frontend ? unix_listener() : tcp_socket(true);
+    const int port = unix_frontend ? -1 : bound_port(listener);
     const std::string value = r2kernel::encode_inherited_fds({{"frontend.api", listener}});
     const std::string assignment = std::string(r2kernel::kInheritedFdsEnv) + "=" + value;
     std::vector<char*> env;
@@ -166,7 +183,8 @@ void child_round_trip(const char* self) {
 int child_main(int port) {
     try {
         const int fd = r2kernel::inherited_socket("frontend.api",
-            expect(InheritedSocketFamily::inet, InheritedSocketType::stream, true, port));
+            expect(port < 0 ? InheritedSocketFamily::unix_socket : InheritedSocketFamily::inet,
+                   InheritedSocketType::stream, true, port < 0 ? std::nullopt : std::optional<int>(port)));
         return (::fcntl(fd, F_GETFD) & FD_CLOEXEC) != 0 ? 0 : 3;
     } catch (const std::exception& error) {
         std::cerr << "child: " << error.what() << '\n';
@@ -184,10 +202,13 @@ void sandbox_denial_diagnostics() {
     require(r2kernel::sandbox_socket_denial(AF_INET6, EPERM).has_value(), "AF_INET6 denial explanation");
     require(!r2kernel::sandbox_socket_denial(AF_INET, EACCES), "only EPERM is the sandbox denial");
     require(!r2kernel::sandbox_socket_denial(AF_UNIX, EPERM), "AF_UNIX is never sandboxed");
-    require(!r2kernel::sandbox_socket_denial(29, EPERM), "AF_CAN needs R2KERNEL_SANDBOX_CAN");
+    require(r2kernel::sandbox_socket_denial(29, EPERM).has_value(), "network sandbox covers AF_CAN without a CAN setting");
+    require(r2kernel::sandbox_socket_denial(AF_VSOCK, EPERM).has_value(), "network sandbox covers AF_VSOCK");
+    require(r2kernel::sandbox_socket_denial(AF_BLUETOOTH, EPERM).has_value(), "network sandbox covers AF_BLUETOOTH");
+    ::unsetenv(r2kernel::kSandboxNetworkEnv);
     ::setenv(r2kernel::kSandboxCanEnv, "brokered", 1);
     const auto can = r2kernel::sandbox_socket_denial(29, EPERM);
-    require(can && can->rfind("socket(AF_CAN) denied by the brokered CAN sandbox", 0) == 0, "AF_CAN denial explanation");
+    require(can && can->rfind("socket(AF_CAN) denied by resources.sandbox.can=brokered;", 0) == 0, "AF_CAN denial explanation");
     ::unsetenv(r2kernel::kSandboxNetworkEnv);
     ::unsetenv(r2kernel::kSandboxCanEnv);
 }
@@ -199,6 +220,7 @@ int main(int argc, char** argv) {
         scenarios();
         sandbox_denial_diagnostics();
         child_round_trip(argv[0]);
+        child_round_trip(argv[0], true);
         std::cout << "inherited fd contract scenarios passed\n";
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

@@ -190,7 +190,7 @@ void validate_encoding(const std::map<std::string, long long>& fds, const std::s
 void check_expectation(const InheritedSocketExpectation& expect) {
     if (expect.listening && expect.type != InheritedSocketType::stream)
         throw std::invalid_argument("inherited socket expectation: listening requires type stream");
-    if (expect.port && expect.family == InheritedSocketFamily::can)
+    if (expect.port && expect.family != InheritedSocketFamily::inet && expect.family != InheritedSocketFamily::inet6)
         throw std::invalid_argument("inherited socket expectation: port applies to inet/inet6 only");
     if (expect.port && (*expect.port < 0 || *expect.port > 65535))
         throw std::invalid_argument("inherited socket expectation: port must be 0..65535");
@@ -201,6 +201,7 @@ const char* family_name(InheritedSocketFamily family) {
     case InheritedSocketFamily::inet: return "inet";
     case InheritedSocketFamily::inet6: return "inet6";
     case InheritedSocketFamily::can: return "can";
+    case InheritedSocketFamily::unix_socket: return "unix";
     }
     return "unknown";
 }
@@ -256,7 +257,8 @@ int inherited_socket(const std::string& kind, const InheritedSocketExpectation& 
         return value;
     };
     const int expected_family = expect.family == InheritedSocketFamily::inet ? AF_INET
-        : expect.family == InheritedSocketFamily::inet6 ? AF_INET6 : AF_CAN;
+        : expect.family == InheritedSocketFamily::inet6 ? AF_INET6
+        : expect.family == InheritedSocketFamily::unix_socket ? AF_UNIX : AF_CAN;
     const int domain = int_option(SO_DOMAIN, "family_mismatch", "SO_DOMAIN");
     if (domain != expected_family)
         throw InheritedFdError("family_mismatch", kind, std::string("expected ") + family_name(expect.family)

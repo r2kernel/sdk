@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from package_support import quote  # noqa: E402
+from package_support import quote, write_gateway_manifest  # noqa: E402
 
 SCRIPTS = ["device_open_probe.py", "udp_sender.py"]
 
@@ -21,7 +21,7 @@ def copy_scripts(package_dir, scripts_dir):
         dst.chmod(dst.stat().st_mode | 0o111)
 
 
-def write_manifest(package_dir, name, command, args, resources):
+def write_manifest(package_dir, name, command, args, resources, *, network_mode="brokered"):
     lines = [
         "schema_version: 1",
         f"name: {quote(name)}",
@@ -33,7 +33,9 @@ def write_manifest(package_dir, name, command, args, resources):
         lines.append(f"    - {quote(arg)}")
     lines.extend(["resources:"])
     lines.extend(resources)
+    lines.extend(["  sandbox:", f"    network: {network_mode}"])
     (package_dir / "package.yaml").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    write_gateway_manifest(package_dir, name)
 
 
 def make_device_package(out_dir, scripts_dir, device, result_file):
@@ -96,6 +98,7 @@ def make_sender_package(
         "./bin/udp_sender.py",
         args,
         network_resources(claim_iface, mode, name, port),
+        network_mode="advisory",
     )
 
 

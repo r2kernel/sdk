@@ -47,3 +47,5 @@ resources:
     interfaces: []
   devices:
     paths: []
+  sandbox:
+    network: brokered
