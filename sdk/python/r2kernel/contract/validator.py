@@ -102,7 +102,7 @@ def validate_runtime_contract_types(runtime: Any, policy: str | None = None, *, 
             _issue(
                 level,
                 "schema_runtime_unavailable",
-                f"contract type validation requires r2kernel-core schema runtime: {exc}",
+                f"contract type validation requires r2kernel-comm schema runtime: {exc}",
             )
         )
         return RuntimeContractTypeReport(policy=effective_policy, issues=tuple(issues))

@@ -16,6 +16,7 @@ from r2kernel.core._control_shm_transport import ControlShmChannelRegistry, Cont
 from r2kernel.core.control_cost_metrics import ControlCostMetrics
 from r2kernel.core.control_source_topic import encode_source_topic
 from r2kernel.core.native_control import NativeControlClient
+from control_shm_support import _install_provider_shm_state
 from test_control_shm import _request_lease, _test_policy, _transact_response_frame
 
 
@@ -59,9 +60,7 @@ class PreparedPeer:
         self.provider._server_stop = threading.Event()
         self.provider._server_connection_threads = set()
         self.provider._server_connection_threads_lock = threading.Lock()
-        self.provider._control_shm_policy = self.policy
-        self.provider._control_shm_budget = ControlShmBudget(self.policy)
-        self.provider._control_shm_counters = ControlShmCounters()
+        _install_provider_shm_state(self.provider, self.policy)
         self.provider._control_cost_metrics = ControlCostMetrics(enabled=False)
         self.provider._now_ns = time.time_ns
         self.provider._handler = lambda request: self.calls.append(request) or {

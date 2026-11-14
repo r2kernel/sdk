@@ -15,7 +15,7 @@ def main() -> int:
     parser.add_argument("--out", required=True)
     parser.add_argument("--device", required=True)
     parser.add_argument("--result-file")
-    parser.add_argument("--repo-root", help="Checkout containing sdk/python (default: the checkout containing this tutorial).")
+    parser.add_argument("--repo-root", help="Checkout or installation prefix containing sdk/python (default: the one containing this tutorial).")
     parser.add_argument("--expect-direct-block", action="store_true")
     args = parser.parse_args()
 

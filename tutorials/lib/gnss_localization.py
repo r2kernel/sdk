@@ -59,7 +59,9 @@ def build_absolute_pose_fix(
     )
     return {
         "frame_id": fixture.geographic_origin.frame_id,
-        "child_frame_id": "cleaner_base",
+        # The body frame comes from the odometry sample (its provider's body
+        # port), never from local configuration or a default.
+        "child_frame_id": odometry["child_frame_id"],
         "pose": pose(x=body_x, y=body_y, z=body_z, yaw=body_yaw),
         "covariance": covariance,
         "source": "component.localizer",
@@ -106,6 +108,10 @@ def build_pose_estimate(
 def validate_odometry_pose(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError("odometry payload must be an object")
+    for field_name in ("frame_id", "child_frame_id"):
+        frame = value.get(field_name)
+        if not isinstance(frame, str) or not frame.strip():
+            raise ValueError(f"odometry payload must name its provider frame in {field_name}")
     pose_value = value.get("pose")
     if not isinstance(pose_value, dict):
         raise ValueError("odometry payload must contain pose")

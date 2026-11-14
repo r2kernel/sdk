@@ -1,6 +1,10 @@
-"""Resource-control tutorial package generators point PYTHONPATH at the real Python SDK sources."""
+"""Resource-control tutorial package generators point PYTHONPATH at the real Python SDK.
+
+That is the SDK sources in a checkout or the installed SDK under a prefix.
+"""
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -49,6 +53,33 @@ class ResourceControlPackageTests(unittest.TestCase):
                 self.assertTrue((sdk / "r2kernel").is_dir(), sdk)
                 self.assertTrue((out / "bin").is_dir())
                 self.assertEqual(load_subsystem_manifest(out / "subsystem.yaml").role, "gateway")
+
+    def test_installed_prefix_uses_the_installed_sdk_site_packages(self) -> None:
+        # The documented flow runs the installed generators from `cd <prefix>`
+        # with `--repo-root "$PWD"`. The installer publishes the SDK as
+        # sdk/python/site-packages, a link into the current managed environment.
+        for name in GENERATORS:
+            for explicit_root in (True, False):
+                with self.subTest(name=name, explicit_root=explicit_root), tempfile.TemporaryDirectory() as directory:
+                    prefix = Path(directory).resolve() / "prefix"
+                    shutil.copytree(
+                        RESOURCE_CONTROL, prefix / "tutorials" / "advanced" / "resource_control",
+                        ignore=shutil.ignore_patterns("__pycache__"),
+                    )
+                    python = prefix / "sdk" / "python"
+                    environment_site = python / "environments" / "env-1" / "lib" / "python3" / "site-packages"
+                    (environment_site / "r2kernel").mkdir(parents=True)
+                    (python / "current").symlink_to(Path("environments") / "env-1")
+                    (python / "site-packages").symlink_to(Path("current") / "lib" / "python3" / "site-packages")
+                    script = prefix / "tutorials" / "advanced" / "resource_control" / name / "bin" / "make_package.py"
+                    out = Path(directory) / "package"
+                    root_arguments = ["--repo-root", str(prefix)] if explicit_root else []
+                    result = subprocess.run(
+                        [sys.executable, "-B", str(script), "--out", str(out), *GENERATORS[name], *root_arguments],
+                        cwd=prefix, capture_output=True, text=True, check=False,
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(generated_pythonpath(out / "package.yaml"), str(python / "site-packages"))
 
     def test_explicit_repo_root_without_sdk_is_refused(self) -> None:
         for name in GENERATORS:

@@ -2,19 +2,42 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
 import sys
 import threading
 from pathlib import Path
 from typing import Any
 
-_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / "subsystems").is_dir() and (parent / "simulator").is_dir())
+
+def _tutorial_root() -> Path:
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "subsystems").is_dir() and (parent / "simulator").is_dir():
+            return parent
+    candidates = [
+        os.environ.get("R2KERNEL_TUTORIAL_ROOT"),
+        str(Path(os.environ.get("R2KERNEL_HOME", "/opt/r2kernel")) / "tutorials"),
+        "/opt/r2kernel/tutorials",
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        root = Path(candidate)
+        if (root / "subsystems").is_dir() and (root / "simulator").is_dir():
+            return root
+    raise RuntimeError(
+        "could not locate R2Kernel tutorial runtime; set R2KERNEL_TUTORIAL_ROOT or install tutorials under /opt/r2kernel/tutorials"
+    )
+
+
+_ROOT = _tutorial_root()
 _SUPPORT_PY = _ROOT / "support" / "python"
 _LIB = _ROOT / "lib"
 for _path in (_SUPPORT_PY, _LIB):
     if str(_path) not in sys.path:
         sys.path.insert(0, str(_path))
 
-from common import WORLD_EVENT_SIZE, extract_payload, response_ok, robot_cleaner_root  # noqa: E402
+from common import WORLD_EVENT_SIZE, extract_payload, response_ok  # noqa: E402
 from gnss_cycle import GnssSampleTracker  # noqa: E402
 from gnss_fixture import GnssFixtureConfiguration, load_gnss_fixture  # noqa: E402
 from gnss_localization import (  # noqa: E402
@@ -73,7 +96,7 @@ class LocalizerSubsystem(ComponentSubsystem):
             manifest_path=manifest_path or default_manifest_path(__file__, "localizer"),
             deployment_manifest_path=deployment_manifest_path,
         )
-        tutorials_root = robot_cleaner_root(__file__)
+        tutorials_root = _ROOT
         self._fixture: GnssFixtureConfiguration = load_gnss_fixture(
             Path(gnss_fixture_path)
             if gnss_fixture_path is not None

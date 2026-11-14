@@ -170,6 +170,111 @@ void validate_subsystem_spatial_conformance(const SubsystemManifest& manifest) {
     }
 }
 
+// Python _provided_api_contracts: the API contracts a public contract
+// provides; specs that do not exist are reported elsewhere.
+std::vector<std::shared_ptr<const ApiContractSpec>> provided_api_contracts(const std::string& contract,
+                                                                           const std::string& field_name) {
+    try {
+        std::vector<std::string> api_ids;
+        if (starts_with(contract, "api.")) {
+            api_ids.push_back(contract);
+        } else if (starts_with(contract, "component.")) {
+            const auto component = contract_loader::find_component_contract(contract);
+            if (component == nullptr) return {};
+            api_ids = component->conformance_apis;
+        } else {
+            return {};
+        }
+        std::vector<std::shared_ptr<const ApiContractSpec>> apis;
+        for (const auto& api_id : api_ids)
+            if (auto api = contract_loader::find_api_contract(api_id)) apis.push_back(std::move(api));
+        return apis;
+    } catch (const std::exception& error) {
+        throw ManifestError("Cannot inspect contract " + python_repr(contract) + " for " + field_name + ": "
+                            + error.what());
+    }
+}
+
+// Python _provided_port_frame: a mapped port is an export port with a literal
+// frame, so the provider and its consumers read the frame from this manifest.
+const std::string& provided_port_frame(const SubsystemManifest& manifest, const std::string& api_id,
+                                       const std::string& interface_name, const contract_loader::ApiFramePort& mapped) {
+    const std::string subject = "Subsystem " + manifest.name + " provides " + api_id + " through provides." + interface_name
+                              + "; its frames.ports." + mapped.field + " names spatial port " + python_repr(mapped.port);
+    const auto port = manifest.spatial.ports.find(mapped.port);
+    if (port == manifest.spatial.ports.end()) throw ManifestError(subject + ", which the subsystem does not declare");
+    if (port->second.direction != "export")
+        throw ManifestError(subject + ", which must be an export port, not " + python_repr(port->second.direction));
+    if (!port->second.frame)
+        throw ManifestError(subject + ", which must declare a literal frame instead of a source alias");
+    return *port->second.frame;
+}
+
+// Python _provided_frame_ports: published topic -> the frame each mapped field
+// of the public provided spatial_ports APIs must carry.
+PublishedFrameChecks provided_frame_checks(const SubsystemManifest& manifest) {
+    PublishedFrameChecks checks;
+    for (const auto& [interface_name, declaration] : manifest.provides) {
+        if (declaration.visibility != "public") continue;
+        for (const auto& api : provided_api_contracts(declaration.contract, "provides." + interface_name)) {
+            for (std::size_t mapped = 0; mapped < api->frame_ports.size(); ++mapped) {
+                const auto& port = api->frame_ports[mapped];
+                const std::string& frame = provided_port_frame(manifest, api->id, interface_name, port);
+                for (const auto& event : api->events) {
+                    if (event.direction != "publish" || mapped >= event.frame_field_indexes.size()) continue;
+                    detail::PublishedFrameCheck check {port.field, event.frame_field_indexes[mapped], port.port, frame,
+                                                       api->id};
+                    auto& topic_checks = checks[event.topic];
+                    const bool known = std::any_of(topic_checks.begin(), topic_checks.end(), [&](const auto& item) {
+                        return item.field == check.field && item.field_index == check.field_index && item.port == check.port
+                            && item.frame == check.frame && item.contract == check.contract;
+                    });
+                    if (!known) topic_checks.push_back(std::move(check));
+                }
+            }
+        }
+    }
+    return checks;
+}
+
+// The bytes of top-level field index of an encoded message: fields are framed
+// by a little-endian u32 length, and 0xFFFFFFFF marks an absent optional field
+// (Data Types And Binary Encoding). Empty when the field is absent or the
+// payload ends first.
+std::optional<std::string_view> encoded_message_field(const EventPayload& payload, std::size_t index) {
+    std::size_t offset = 0;
+    for (std::size_t field = 0;; ++field) {
+        if (payload.size() - offset < 4) return std::nullopt;
+        const std::uint32_t length = static_cast<std::uint32_t>(payload[offset])
+                                   | static_cast<std::uint32_t>(payload[offset + 1]) << 8
+                                   | static_cast<std::uint32_t>(payload[offset + 2]) << 16
+                                   | static_cast<std::uint32_t>(payload[offset + 3]) << 24;
+        offset += 4;
+        if (length == 0xFFFFFFFFu) {
+            if (field == index) return std::nullopt;
+            continue;
+        }
+        if (payload.size() - offset < length) return std::nullopt;
+        if (field == index) return std::string_view(reinterpret_cast<const char*>(payload.data() + offset), length);
+        offset += length;
+    }
+}
+
+// The frame_mismatch refusal of an encoded sample, if any: each mapped field
+// must carry exactly its spatial port's frame (Python _published_frames_match).
+std::optional<std::string> published_frame_mismatch(const std::string& topic, const EventPayload& payload,
+                                                    const std::vector<detail::PublishedFrameCheck>& checks) {
+    for (const auto& check : checks) {
+        const auto actual = encoded_message_field(payload, check.field_index);
+        if (actual && *actual == check.frame) continue;
+        return "frame_mismatch: " + topic + "." + check.field + " is "
+             + (actual ? python_repr(std::string(*actual)) : std::string("missing")) + ", but spatial port "
+             + python_repr(check.port) + " has frame " + python_repr(check.frame) + " (" + check.contract
+             + "); the sample was not published";
+    }
+    return std::nullopt;
+}
+
 const SpatialPortDeclaration& resolve_spatial_target_port(const DeploymentManifest& deployment,
                                                           const SubsystemManifest& owner,
                                                           const SpatialPortReference& reference) {

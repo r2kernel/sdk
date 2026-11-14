@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import yaml
 
@@ -35,6 +36,20 @@ def load_yaml(path: Path) -> dict:
         return yaml.safe_load(stream)
 
 
+class RecordingRuntime:
+    """Stands in for the SDK runtime; records what reaches the transport."""
+
+    def __init__(self, **_kwargs) -> None:
+        self.published: list[tuple[str, dict]] = []
+
+    def now_ns(self) -> int:
+        return 1
+
+    def publish_event(self, *, topic: str, value, timestamp=None) -> bool:
+        self.published.append((topic, value))
+        return True
+
+
 class MobileComponentApiTest(unittest.TestCase):
     def test_mobile_base_component_contracts_include_control_free_reference_api(self) -> None:
         api_path = ROOT / "spec" / "apis" / "api" / "locomotion" / "velocity_reference" / "v1.yaml"
@@ -57,10 +72,30 @@ class MobileComponentApiTest(unittest.TestCase):
             ],
         )
 
-        for path in sorted((ROOT / "spec" / "components" / "component" / "mobile_base").glob("**/v1.yaml")):
+        for path in sorted((ROOT / "spec" / "components" / "component" / "mobile_base").glob("**/v*.yaml")):
             with self.subTest(component=path):
                 contract = load_yaml(path)
                 self.assertIn("api.locomotion.velocity_reference.v1", contract["conformance_apis"])
+
+    def test_odometry_names_the_frames_of_its_reference_and_body_ports(self) -> None:
+        manifest = MOBILE_COMPONENT / "subsystem.yaml"
+        ports = load_yaml(manifest)["spatial"]["ports"]
+        with tempfile.TemporaryDirectory() as user_data, patch(
+            "r2kernel.wrapper.subsystem.SubsystemRuntime", RecordingRuntime
+        ):
+            component = MobileControllerSubsystem(user_data_path=user_data, manifest_path=str(manifest))
+            component._publish_odometry()
+
+            topic, sample = component._runtime.published[-1]
+            self.assertEqual(topic, "odometry")
+            self.assertEqual(
+                (sample["frame_id"], sample["child_frame_id"]),
+                (ports["reference"]["frame"], ports["body"]["frame"]),
+            )
+            # api.locomotion.odometry.v2: the SDK refuses a sample that names other frames.
+            refused = dict(sample, child_frame_id="base_link")
+            self.assertFalse(component.publish_event(topic="odometry", value=refused))
+            self.assertEqual(component._runtime.published[-1], (topic, sample))
 
     def test_procedure_dispatches_timed_control_with_component_generated_bounded_validity(self) -> None:
         component = self._component()

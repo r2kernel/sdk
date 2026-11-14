@@ -9,7 +9,7 @@
 #include "r2kernel/wrapper/subsystem.hpp"
 #include "../src/core/control_registration_keeper.hpp"
 #include "fake_control_socket.hpp"
-#include "r2kernel_core.h"
+#include "r2kernel_comm.h"
 
 #include <algorithm>
 #include <atomic>

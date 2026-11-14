@@ -3,7 +3,8 @@ set -euo pipefail
 
 DEVICE="/dev/ttyAMA10"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Source root that contains tutorials/ and sdk/python (five levels above bin/).
+# Source root or installation prefix that contains tutorials/ and sdk/python
+# (five levels above bin/).
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../../../.." && pwd)"
 PREFIX="${R2KERNEL_PREFIX:-}"
 CONFIG_ARG=""
@@ -25,7 +26,8 @@ Run a reproducible R2Kernel brokered TTY device smoke test.
 The script uses installed release binaries from --prefix, R2KERNEL_PREFIX,
 /opt/r2kernel, or ~/.local/r2kernel. Without an installed prefix, pass
 --config, --resourced and --launch explicitly. --repo-root names the source
-root that contains sdk/python (default: the root containing this tutorial).
+root or installation prefix that contains sdk/python (default: the one
+containing this tutorial).
 
 The script temporarily protects the selected TTY node as root:DEVICE_GROUP
 mode 0660, starts r2kernel-resourced as root, launches a managed package that

@@ -1,10 +1,11 @@
-"""Shared helpers for the local Control SHM v5 tests: test policy and hand-built v5 frames."""
+"""Shared helpers for the local Control SHM v5 tests: test policy, provider state and hand-built v5 frames."""
 
 from __future__ import annotations
 
 import struct
 
-from r2kernel.core._control_shm_region import ControlShmPolicy
+from r2kernel.core._control_shm_region import ControlShmBudget, ControlShmPolicy
+from r2kernel.core._control_shm_transport import ControlShmCounters
 
 
 def _test_policy(**overrides: int) -> ControlShmPolicy:
@@ -17,6 +18,16 @@ def _test_policy(**overrides: int) -> ControlShmPolicy:
     }
     values.update(overrides)
     return ControlShmPolicy(**values)
+
+
+def _install_provider_shm_state(provider, policy: ControlShmPolicy | None = None) -> None:
+    """Give a provider built with ``object.__new__`` the SHM state its constructor creates.
+
+    Every handler connection reads it, so a fixture without it fails in the connection thread.
+    """
+    provider._control_shm_policy = policy or _test_policy()
+    provider._control_shm_budget = ControlShmBudget(provider._control_shm_policy)
+    provider._control_shm_counters = ControlShmCounters()
 
 
 def _push_bytes(output: bytearray, value: bytes) -> None:

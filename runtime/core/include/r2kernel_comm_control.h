@@ -1,11 +1,11 @@
-#ifndef R2KERNEL_CORE_CONTROL_H
-#define R2KERNEL_CORE_CONTROL_H
+#ifndef R2KERNEL_COMM_CONTROL_H
+#define R2KERNEL_COMM_CONTROL_H
 
 /*
  * Control channel C ABI: the request/response transport that carries
  * Procedure and Operation calls. The SDTR Control envelope codecs
  * (r2kernel_codec_{encode,decode}_control_{request,response}_v2) are
- * declared in r2kernel_core.h.
+ * declared in r2kernel_comm.h.
  */
 
 #include <stdint.h>
@@ -21,6 +21,12 @@ typedef struct R2KernelControlServer R2KernelControlServer;
 /*
  * Signals: a send to a closed peer fails (SystemError -3) and never raises
  * SIGPIPE, so a host does not need to ignore SIGPIPE.
+ *
+ * Receive buffers: when a buffer is too small, r2kernel_control_client_recv
+ * and r2kernel_control_server_recv_with_token return BufferTooSmall (-4),
+ * report every required length in their out_*_len arguments and keep the
+ * frame queued; a retry with buffers of those sizes receives it. A NULL
+ * buffer receives the frame without copying that part.
  */
 
 int r2kernel_control_client_create(const char* identity, R2KernelControlClient** out_handle);
@@ -93,4 +99,4 @@ int r2kernel_control_server_send_with_token(
 }
 #endif
 
-#endif // R2KERNEL_CORE_CONTROL_H
+#endif // R2KERNEL_COMM_CONTROL_H

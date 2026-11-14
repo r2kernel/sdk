@@ -84,6 +84,11 @@ def package_spec_sources(roots):
         _scoped_roots.reset(token)
 
 
+def spec_snapshot_scope_active() -> bool:
+    """Whether loaders currently read a captured codec snapshot."""
+    return _frozen_sources.get() is not None
+
+
 def read_spec_text(path: Path) -> str:
     frozen = _frozen_sources.get()
     if frozen is None:
@@ -124,9 +129,19 @@ def spec_root_candidates() -> tuple[Path, ...]:
     if env_root:
         _push_path(candidates, Path(env_root).expanduser())
 
+    # Only the working directory itself, as in the runtime core and the C++ SDK;
+    # its ancestors are not searched (cross-audit SDK-112-03).
     cwd = Path.cwd()
-    _push_ancestor_spec_roots(candidates, cwd)
+    _push_path(candidates, cwd / "r2kernel-spec")
+    _push_path(candidates, cwd / "spec")
 
+    _push_standard_spec_roots(candidates)
+    return tuple(candidates)
+
+
+def installed_spec_roots() -> tuple[Path, ...]:
+    """The existing installed, bundle-adjacent, checkout and packaged spec roots, in search order."""
+    candidates: list[Path] = []
     _push_standard_spec_roots(candidates)
     return tuple(candidates)
 
@@ -168,9 +183,3 @@ def relative_spec_path(top_level: str, spec_id: str) -> Path:
 def _push_path(candidates: list[Path], path: Path) -> None:
     if path.exists() and path not in candidates:
         candidates.append(path)
-
-
-def _push_ancestor_spec_roots(candidates: list[Path], start: Path) -> None:
-    for directory in (start, *start.parents):
-        _push_path(candidates, directory / "r2kernel-spec")
-        _push_path(candidates, directory / "spec")

@@ -12,7 +12,7 @@
 #include "operation_event_wire.hpp"
 #include "timing_support.hpp"
 #include "subsystem_config.hpp"
-#include "r2kernel_core.h"
+#include "r2kernel_comm.h"
 
 #include <yaml-cpp/yaml.h>
 
@@ -23,6 +23,7 @@
 #include <cmath>
 #include <cctype>
 #include <exception>
+#include <fstream>
 #include <cstdlib>
 #include <cerrno>
 #include <cstring>
@@ -69,6 +70,8 @@ namespace {
 #include "subsystem_spatial.hpp"
 
 #include "subsystem_platform.hpp"
+
+#include "subsystem_dictionary.hpp"
 
 #include "subsystem_deployment.hpp"
 
@@ -200,6 +203,13 @@ std::optional<ProcedureResponse> Subsystem::call_procedure_impl(const std::strin
         return make_procedure_response(false, request_id, "null", "timeout", "procedure transport timeout", now_ns());
     }
     const std::string response_text(response->payload.begin(), response->payload.end());
+    if (response->status != 0) {
+        // A failure status carries no Procedure response object; report it as
+        // the typed calls do (cross-audit SDK-112-02).
+        return make_procedure_response(false, request_id, "null", "procedure_transport_failed",
+                                       response_text.empty() ? "procedure transport failed" : response_text,
+                                       response->timestamp_ns);
+    }
     ProcedureResponse out;
     out.request_id = json_string_field_local(response_text, "request_id").value_or(request_id);
     out.ok = json_bool_field_local(response_text, "ok").value_or(false);

@@ -11,11 +11,10 @@ from r2kernel.core._control_shm import (
     receive_control_shm_frame,
     send_control_shm_frame,
 )
-from r2kernel.core._control_shm_region import ControlShmBudget, ControlShmRegion
-from r2kernel.core._control_shm_transport import ControlShmCounters
+from r2kernel.core._control_shm_region import ControlShmRegion
 from r2kernel.core.control_cost_metrics import ControlCostMetrics
 from r2kernel.core.native_control import NativeControlClient
-from control_shm_support import _push_string, _test_policy
+from control_shm_support import _install_provider_shm_state, _push_string
 
 
 def _provider(*, auth_required: bool, identity: str) -> NativeControlClient:
@@ -27,9 +26,7 @@ def _provider(*, auth_required: bool, identity: str) -> NativeControlClient:
     client._identity = identity
     client._server_connection_threads = set()
     client._server_connection_threads_lock = threading.Lock()
-    client._control_shm_policy = _test_policy()
-    client._control_shm_budget = ControlShmBudget(client._control_shm_policy)
-    client._control_shm_counters = ControlShmCounters()
+    _install_provider_shm_state(client)
     client._now_ns = time.time_ns
     return client
 

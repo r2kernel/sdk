@@ -18,8 +18,9 @@ _AF_CAN = getattr(socket, "AF_CAN", 29)
 _CAN_RAW = getattr(socket, "CAN_RAW", 1)
 _SOCKET_MODULE_FILE = os.path.abspath(socket.__file__)
 _AUTHORIZED_ALTERNATIVES = (
-    "; request only sockets authorized by this package's grants, use a declared frontend listener or "
-    "R2Kernel interfaces, or validate a leader-passed descriptor (R2KERNEL_INHERITED_FDS)"
+    "; for outbound TCP use the app uplink (open_uplink_tcp), request only sockets authorized by "
+    "this package's grants, use a declared frontend listener or R2Kernel interfaces, or validate a "
+    "leader-passed descriptor (R2KERNEL_INHERITED_FDS)"
 )
 
 

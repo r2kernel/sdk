@@ -11,13 +11,16 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstdlib>
+#include <cstdint>
 #include <cstring>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
 #if defined(__linux__)
+#include <arpa/inet.h>
 #include <fcntl.h>
 #include <poll.h>
 #include <sys/socket.h>
@@ -35,6 +38,13 @@ constexpr std::size_t kMaxResourceResponseBytes = 1024 * 1024;
 constexpr std::size_t kReceiveChunkBytes = 8192;
 constexpr int kAncillaryDescriptorSlots = 64;
 constexpr auto kResourceRequestTimeout = std::chrono::seconds(5);
+// open_uplink_tcp: the broker may spend the whole connect timeout resolving and
+// connecting, so its reply is awaited for that timeout plus this margin.
+constexpr auto kUplinkReplyMargin = std::chrono::seconds(2);
+// Protocol bounds of an uplink request: the timeout is at most the largest
+// max_connect_timeout_ms a host accepts, and the host is at most 253 bytes.
+constexpr auto kUplinkMaxTimeout = std::chrono::milliseconds(120000);
+constexpr std::size_t kUplinkMaxHostBytes = 253;
 
 std::string env_or_empty(const char* name) {
     const char* raw = std::getenv(name);
@@ -49,8 +59,9 @@ using Clock = std::chrono::steady_clock;
 
 class ResourceRequest {
 public:
-    ResourceRequest(const std::string& socket_path, std::string line, bool require_root)
-        : socket_path_(socket_path), line_(std::move(line)), deadline_(Clock::now() + kResourceRequestTimeout), require_root_(require_root) {}
+    // budget is the request's absolute deadline from now (connect, send, every receive).
+    ResourceRequest(const std::string& socket_path, std::string line, std::chrono::milliseconds budget)
+        : socket_path_(socket_path), line_(std::move(line)), deadline_(Clock::now() + budget) {}
 
     ~ResourceRequest() {
         for (const int fd : fds_) ::close(fd);
@@ -62,12 +73,6 @@ public:
     // One submission; returns the broker's result object and the descriptor.
     std::pair<JsonValue, int> run() {
         connect_broker();
-        if (require_root_) {
-            ucred credentials {};
-            socklen_t length = sizeof(credentials);
-            if (::getsockopt(socket_, SOL_SOCKET, SO_PEERCRED, &credentials, &length) != 0 || credentials.uid != 0)
-                throw std::runtime_error("Approved streams require a root-owned broker process");
-        }
         send_line();
         std::string response;
         for (;;) {
@@ -189,9 +194,10 @@ private:
             throw std::runtime_error("Malformed R2Kernel resource response");
         if (!ok->as_bool()) {
             const JsonValue* error = response.find("error");
+            std::string code = response.string_member("error_code").value_or(std::string {});
             if (error != nullptr && error->truthy())
-                throw std::runtime_error(error->is_string() ? error->text() : error->dump());
-            throw std::runtime_error("R2Kernel resource request failed");
+                throw ResourceBrokerError(std::move(code), error->is_string() ? error->text() : error->dump());
+            throw ResourceBrokerError(std::move(code), "R2Kernel resource request failed");
         }
         const JsonValue* metadata = response.find("result");
         if (metadata == nullptr || !metadata->is_object())
@@ -206,21 +212,21 @@ private:
     const std::string& socket_path_;
     const std::string line_;
     const Clock::time_point deadline_;
-    bool require_root_;
     int socket_ = -1;
     std::vector<int> fds_;
 };
 #endif
 
-std::pair<std::string, int> request_fd(const std::string& socket_path, const std::string& request_json, bool require_root = false) {
+std::pair<std::string, int> request_fd(const std::string& socket_path, const std::string& request_json,
+                                       std::chrono::milliseconds budget = kResourceRequestTimeout) {
 #if defined(__linux__)
-    ResourceRequest request(socket_path, request_json + "\n", require_root);
+    ResourceRequest request(socket_path, request_json + "\n", budget);
     auto [metadata, fd] = request.run();
     return {metadata.dump(), fd};
 #else
     (void)socket_path;
     (void)request_json;
-    (void)require_root;
+    (void)budget;
     throw std::runtime_error("R2Kernel resource broker requests require Linux Unix descriptor passing");
 #endif
 }
@@ -272,7 +278,92 @@ void close_descriptor(int& fd) noexcept {
     fd = -1;
 }
 
+#if defined(__linux__)
+std::optional<in6_addr> ipv6_address(const std::string& text) {
+    in6_addr address {};
+    if (text.find('\0') != std::string::npos || ::inet_pton(AF_INET6, text.c_str(), &address) != 1)
+        return std::nullopt;
+    return address;
+}
+#endif
+
+// The host as the broker normalizes it: lowercase, without one trailing dot.
+std::string normalized_uplink_host(const std::string& host) {
+    if (host.empty() || host.size() > kUplinkMaxHostBytes
+            || std::any_of(host.begin(), host.end(), [](unsigned char byte) { return byte >= 0x80; }))
+        throw std::invalid_argument("UplinkTcpOptions::host must be an ASCII DNS name or IP literal of 1 to 253 bytes");
+    std::string name = host.back() == '.' ? host.substr(0, host.size() - 1) : host;
+    for (char& byte : name) {
+        if (byte >= 'A' && byte <= 'Z') byte = static_cast<char>(byte - 'A' + 'a');
+    }
+    if (name.find(':') != std::string::npos) {
+        bool literal = name.find_first_not_of("0123456789abcdef:.") == std::string::npos;
+#if defined(__linux__)
+        literal = literal && ipv6_address(name).has_value();
+#endif
+        if (!literal)
+            throw std::invalid_argument("UplinkTcpOptions::host " + host
+                                        + " is not an IPv6 literal (write it without brackets or a zone)");
+    } else if (name.empty() || name.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789-.") != std::string::npos
+               || name.front() == '.' || name.back() == '.' || name.find("..") != std::string::npos) {
+        throw std::invalid_argument("UplinkTcpOptions::host " + host + " is not a DNS name or an IPv4 literal");
+    }
+    return name;
+}
+
+// The reply names the requested host: the same text, or the same address for
+// an IPv6 literal written differently.
+bool same_uplink_host(const std::string& reported, const std::string& requested) {
+    if (reported == requested) return true;
+#if defined(__linux__)
+    const auto left = ipv6_address(reported);
+    const auto right = ipv6_address(requested);
+    return left && right && std::memcmp(left->s6_addr, right->s6_addr, sizeof(left->s6_addr)) == 0;
+#else
+    return false;
+#endif
+}
+
+// Names the first failed check of an uplink reply; empty when it is valid.
+std::string uplink_problem(int fd, const JsonValue& metadata, const std::string& lease_id, const std::string& host,
+                           std::uint16_t port) {
+    const auto connection_id = metadata.string_member("connection_id");
+    const auto reported_host = metadata.string_member("host");
+    const JsonValue* reported_port = metadata.find("port");
+    if (!metadata.member_equals("kind", "uplink_tcp")) return "metadata kind is not uplink_tcp";
+    if (!metadata.member_equals("lease_id", lease_id)) return "metadata lease_id is not this client's lease";
+    if (!connection_id || connection_id->size() != 32
+            || connection_id->find_first_not_of("0123456789abcdef") != std::string::npos)
+        return "metadata connection_id is not 32 lowercase hexadecimal digits";
+    if (reported_port == nullptr || !reported_port->is_number() || reported_port->text() != std::to_string(port))
+        return "metadata port does not match the request";
+    if (!reported_host || !same_uplink_host(*reported_host, host)) return "metadata host does not match the request";
+#if defined(__linux__)
+    const auto option = [&](int name, int expected) {
+        int actual = 0;
+        socklen_t length = sizeof(actual);
+        return ::getsockopt(fd, SOL_SOCKET, name, &actual, &length) == 0 && length == sizeof(actual)
+            && actual == expected;
+    };
+    if (!option(SO_DOMAIN, AF_UNIX) || !option(SO_TYPE, SOCK_STREAM) || !option(SO_ACCEPTCONN, 0))
+        return "the descriptor is not a nonlistening AF_UNIX stream socket";
+    sockaddr_storage peer {};
+    socklen_t peer_length = sizeof(peer);
+    if (::getpeername(fd, reinterpret_cast<sockaddr*>(&peer), &peer_length) != 0
+            || peer_length < sizeof(peer.ss_family) || peer.ss_family != AF_UNIX)
+        return "the descriptor is not connected";
+#else
+    (void)fd;
+#endif
+    return {};
+}
+
 }  // namespace
+
+ResourceBrokerError::ResourceBrokerError(std::string code, const std::string& message)
+    : std::runtime_error(message), code_(std::move(code)) {}
+
+ResourceBrokerError::~ResourceBrokerError() = default;
 
 void BrokeredSocketResult::close() noexcept {
 #if defined(__linux__)
@@ -305,37 +396,25 @@ BrokeredSocketResult ResourceBrokerClient::open_udp_socket(const UdpSocketOption
             + ",\"bind_port\":" + std::to_string(options.bind_port) + "}"));
 }
 
-BrokeredSocketResult ResourceBrokerClient::open_approved_tcp_stream(const std::string& grant_id) const {
-    if (grant_id.empty() || grant_id.size() > 256)
-        throw std::runtime_error("grant_id must be a nonempty identifier of at most 256 bytes");
+BrokeredSocketResult ResourceBrokerClient::open_uplink_tcp(const UplinkTcpOptions& options) const {
+    const std::string host = normalized_uplink_host(options.host);
+    if (options.port == 0) throw std::invalid_argument("UplinkTcpOptions::port must be in 1..65535");
+    if (options.timeout.count() < 1 || options.timeout > kUplinkMaxTimeout)
+        throw std::invalid_argument("UplinkTcpOptions::timeout must be between 1 ms and 120 s");
     auto result = socket_result(request_fd(socket_path_,
-        "{\"op\":\"open_approved_tcp_stream\",\"lease_id\":" + quoted(lease_id_)
-            + ",\"grant_id\":" + quoted(grant_id) + "}", true));
+        "{\"op\":\"open_uplink_tcp\",\"lease_id\":" + quoted(lease_id_) + ",\"host\":" + quoted(host)
+            + ",\"port\":" + std::to_string(options.port) + ",\"timeout_ms\":"
+            + std::to_string(options.timeout.count()) + "}",
+        options.timeout + kUplinkReplyMargin));
     try {
-#if defined(__linux__)
-        const auto metadata = r2kernel::sdk_detail::parse_json(result.metadata_json);
-        const auto execution = metadata.string_member("execution_id");
-        const bool valid_execution = execution && execution->size() == 32
-            && std::all_of(execution->begin(), execution->end(), [](unsigned char byte) {
-                return (byte >= '0' && byte <= '9') || (byte >= 'a' && byte <= 'f');
-            });
-        const auto option = [&](int name, int expected) {
-            int actual = 0;
-            socklen_t length = sizeof(actual);
-            return ::getsockopt(result.socket, SOL_SOCKET, name, &actual, &length) == 0
-                && length == sizeof(actual) && actual == expected;
-        };
-        sockaddr_storage peer {};
-        socklen_t peer_length = sizeof(peer);
-        if (!option(SO_DOMAIN, AF_UNIX) || !option(SO_TYPE, SOCK_STREAM) || !option(SO_ACCEPTCONN, 0)
-            || ::getpeername(result.socket, reinterpret_cast<sockaddr*>(&peer), &peer_length) != 0
-            || peer_length < sizeof(peer.ss_family) || peer.ss_family != AF_UNIX || !valid_execution
-            || !metadata.member_equals("kind", "approved_tcp_stream")
-            || !metadata.member_equals("lease_id", lease_id_) || !metadata.member_equals("grant_id", grant_id))
-            throw std::runtime_error("Invalid approved TCP stream descriptor or authority metadata");
-#endif
+        const std::string problem = uplink_problem(result.socket, r2kernel::sdk_detail::parse_json(result.metadata_json),
+                                                   lease_id_, host, options.port);
+        if (!problem.empty()) throw std::runtime_error("Invalid app uplink response: " + problem);
         return result;
-    } catch (...) { result.close(); throw; }
+    } catch (...) {
+        close_descriptor(result.socket);
+        throw;
+    }
 }
 
 BrokeredSocketResult ResourceBrokerClient::open_tcp_socket(const TcpSocketOptions& options) const {
@@ -385,8 +464,8 @@ BrokeredSocketResult R2KernelClient::open_udp_socket(const UdpSocketOptions& opt
     return ResourceBrokerClient().open_udp_socket(options);
 }
 
-BrokeredSocketResult R2KernelClient::open_approved_tcp_stream(const std::string& grant_id) const {
-    return ResourceBrokerClient().open_approved_tcp_stream(grant_id);
+BrokeredSocketResult R2KernelClient::open_uplink_tcp(const UplinkTcpOptions& options) const {
+    return ResourceBrokerClient().open_uplink_tcp(options);
 }
 
 BrokeredSocketResult R2KernelClient::open_tcp_socket(const TcpSocketOptions& options) const {

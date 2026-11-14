@@ -1,6 +1,6 @@
 from __future__ import annotations
 import time
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from . import _keywords as KW
 from r2kernel.helper.logger import coerce_logger
@@ -10,6 +10,10 @@ from .native_control import NativeControlClient
 from .event_client import EventClient
 from .constants import LOCAL_HOST
 from .resource import BrokeredFdResult, BrokeredSocketResult, ResourceBrokerClient
+
+if TYPE_CHECKING:
+    import asyncio
+    import ssl
 
 
 class R2KernelClient:
@@ -158,8 +162,45 @@ class R2KernelClient:
             bind_port=bind_port,
         )
 
-    def open_approved_tcp_stream(self, *, grant_id: str) -> BrokeredSocketResult:
-        return ResourceBrokerClient().open_approved_tcp_stream(grant_id=grant_id)
+    def open_uplink_tcp(
+        self,
+        host: str,
+        port: int,
+        *,
+        timeout_s: float = 10.0,
+        tls: bool = False,
+        server_hostname: str | None = None,
+        ssl_context: ssl.SSLContext | None = None,
+    ) -> BrokeredSocketResult:
+        return ResourceBrokerClient().open_uplink_tcp(
+            host,
+            port,
+            timeout_s=timeout_s,
+            tls=tls,
+            server_hostname=server_hostname,
+            ssl_context=ssl_context,
+        )
+
+    async def open_uplink_connection(
+        self,
+        host: str,
+        port: int,
+        *,
+        timeout_s: float = 10.0,
+        tls: bool = False,
+        server_hostname: str | None = None,
+        ssl_context: ssl.SSLContext | None = None,
+        limit: int = 2**16,
+    ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        return await ResourceBrokerClient().open_uplink_connection(
+            host,
+            port,
+            timeout_s=timeout_s,
+            tls=tls,
+            server_hostname=server_hostname,
+            ssl_context=ssl_context,
+            limit=limit,
+        )
 
     def open_tcp_socket(
         self,

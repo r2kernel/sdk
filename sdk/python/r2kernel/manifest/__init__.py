@@ -6,10 +6,12 @@ from .loader import (
     load_deployment_manifest,
     load_robot_platform_manifest,
     load_subsystem_manifest,
+    provided_frame_ports,
     subsystem_manifest_status_payload,
     validate_required_bindings_for_subsystem,
     validate_runtime_endpoints,
 )
+from ._spatial import ProvidedFramePort
 from .model import (
     ApplicationManifest,
     BindingReference,
@@ -38,6 +40,7 @@ __all__ = [
     "ExportDeclaration",
     "InterfaceDeclaration",
     "ManifestError",
+    "ProvidedFramePort",
     "RobotPlatformManifest",
     "RobotPlatformSlot",
     "RuntimeManifestIssue",
@@ -51,6 +54,7 @@ __all__ = [
     "load_deployment_manifest",
     "load_robot_platform_manifest",
     "load_subsystem_manifest",
+    "provided_frame_ports",
     "subsystem_manifest_status_payload",
     "validate_required_bindings_for_subsystem",
     "validate_runtime_endpoints",

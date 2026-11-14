@@ -142,12 +142,9 @@ std::vector<std::filesystem::path> environment_paths(const char* name) {
     return out;
 }
 
-// Contract roots to inspect one package's manifest with (Python
-// package_spec_sources): the package's contracts.spec_roots, then
-// R2KERNEL_SPEC_PATH without the caller's own R2KERNEL_CONTRACT_SPEC_ROOTS,
-// then R2KERNEL_SPEC_ROOT; the shipped standards follow in the core. Empty
-// when the package declares no roots (the ambient roots apply).
-std::vector<std::string> package_spec_scope(const std::filesystem::path& package_root, const YAML::Node& package) {
+// The package's own contracts.spec_roots, resolved (Python
+// _package_contract_spec_roots).
+std::vector<std::string> package_declared_spec_roots(const std::filesystem::path& package_root, const YAML::Node& package) {
     const YAML::Node contracts = package["contracts"];
     if (!yaml_present(contracts)) return {};
     if (!contracts.IsMap()) throw ManifestError("Package contracts must be a mapping");
@@ -159,6 +156,16 @@ std::vector<std::string> package_spec_scope(const std::filesystem::path& package
         if (!root.IsScalar()) throw ManifestError("Package contracts.spec_roots must be a list of strings");
         append_unique_root(roots, package_relative_path(package_root, root.Scalar(), "contracts.spec_roots", true));
     }
+    return roots;
+}
+
+// Contract roots to inspect one package's manifest with (Python
+// package_spec_sources): the package's contracts.spec_roots, then
+// R2KERNEL_SPEC_PATH without the caller's own R2KERNEL_CONTRACT_SPEC_ROOTS,
+// then R2KERNEL_SPEC_ROOT; the shipped standards follow in the core. Empty
+// when the package declares no roots (the ambient roots apply).
+std::vector<std::string> package_spec_scope(const std::vector<std::string>& declared) {
+    std::vector<std::string> roots = declared;
     if (roots.empty()) return {};
     std::vector<std::string> caller;
     for (const auto& root : environment_paths("R2KERNEL_CONTRACT_SPEC_ROOTS")) append_unique_root(caller, root);
@@ -171,12 +178,10 @@ std::vector<std::string> package_spec_scope(const std::filesystem::path& package
     return roots;
 }
 
-// Python load_subsystem_manifest: the manifest at path, read with the
-// contract roots of its package (package_root, else the nearest parent
-// directory holding package.yaml).
-SubsystemManifest load_package_subsystem_manifest(const std::filesystem::path& raw_path,
-                                                  std::optional<std::filesystem::path> package_root) {
-    const auto path = resolved_path(expand_user(raw_path));
+// The contract spec roots of the package that holds the manifest at path
+// (package_root, else the nearest parent directory holding package.yaml).
+std::vector<std::string> subsystem_package_spec_roots(const std::filesystem::path& path,
+                                                      std::optional<std::filesystem::path> package_root) {
     if (!package_root) {
         for (auto parent = path.parent_path(); !parent.empty(); parent = parent.parent_path()) {
             if (std::filesystem::is_regular_file(parent / "package.yaml")) {
@@ -186,19 +191,48 @@ SubsystemManifest load_package_subsystem_manifest(const std::filesystem::path& r
             if (parent == parent.root_path()) break;
         }
     }
+    if (!package_root) return {};
+    const auto root = resolved_path(*package_root);
+    if (!path_within(root, path))
+        throw ManifestError("Subsystem manifest must remain inside package directory: " + path.string());
+    return package_declared_spec_roots(root, load_yaml_mapping(root / "package.yaml", "package manifest"));
+}
+
+// The contract inventory of a package scope; null when the package declares
+// no roots (the ambient inventory applies).
+std::shared_ptr<const contract_loader::Inventory> package_inventory(const std::vector<std::string>& declared) {
+    const auto spec_roots = package_spec_scope(declared);
+    if (spec_roots.empty()) return nullptr;
+    return std::make_shared<contract_loader::Inventory>(std::make_shared<SchemaContext>(spec_roots));
+}
+
+// Python load_subsystem_manifest: the manifest at path, read with the
+// contract roots of its package, which must respect the IDs reserved for the
+// installed dictionary.
+SubsystemManifest load_package_subsystem_manifest(const std::filesystem::path& raw_path,
+                                                  std::optional<std::filesystem::path> package_root) {
+    const auto path = resolved_path(expand_user(raw_path));
+    const auto declared = subsystem_package_spec_roots(path, std::move(package_root));
+    validate_package_spec_roots(std::vector<std::filesystem::path>(declared.begin(), declared.end()));
     std::optional<contract_loader::InventoryScope> package_scope;
-    if (package_root) {
-        const auto root = resolved_path(*package_root);
-        if (!path_within(root, path))
-            throw ManifestError("Subsystem manifest must remain inside package directory: " + path.string());
-        const auto spec_roots = package_spec_scope(root, load_yaml_mapping(root / "package.yaml", "package manifest"));
-        if (!spec_roots.empty()) {
-            package_scope.emplace(
-                std::make_shared<contract_loader::Inventory>(std::make_shared<SchemaContext>(spec_roots)));
-        }
-    }
+    if (auto inventory = package_inventory(declared)) package_scope.emplace(std::move(inventory));
     try {
         return parse_subsystem_manifest_file(path);
+    } catch (const ManifestError&) {
+        throw;
+    } catch (const std::exception& error) {
+        throw ManifestError(error.what());
+    }
+}
+
+// Python provided_frame_ports: the frame checks of the provided spatial_ports
+// APIs, read with the same package contract roots as the manifest.
+PublishedFrameChecks package_provided_frame_checks(const SubsystemManifest& manifest) {
+    std::optional<contract_loader::InventoryScope> package_scope;
+    if (auto inventory = package_inventory(subsystem_package_spec_roots(manifest.path, std::nullopt)))
+        package_scope.emplace(std::move(inventory));
+    try {
+        return provided_frame_checks(manifest);
     } catch (const ManifestError&) {
         throw;
     } catch (const std::exception& error) {

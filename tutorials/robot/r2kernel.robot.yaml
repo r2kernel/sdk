@@ -49,7 +49,7 @@ slots:
   mobile_base_controller:
     role: component
     part: base
-    contract: component.mobile_base.odometry.v1
+    contract: component.mobile_base.odometry.v2
   manipulator_controller:
     role: component
     part: arm

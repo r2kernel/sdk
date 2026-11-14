@@ -1,22 +1,39 @@
 from __future__ import annotations
 
 import array
+import ipaddress
 import json
+import math
 import os
 import socket
 import struct
 import sys
 import time
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 # Re-exported: the inherited-socket helpers belong to the resource API surface.
 from .inherited_fds import INHERITED_FDS_ENV, InheritedFdError, encode_inherited_fds, inherited_socket  # noqa: F401
+
+if TYPE_CHECKING:
+    import asyncio
+    import ssl
 
 
 DEFAULT_RESOURCE_SOCKET = "/run/r2kernel/resourced.sock"
 _MAX_RESOURCE_RESPONSE_BYTES = 1024 * 1024
 _RESOURCE_REQUEST_TIMEOUT_S = 5.0
+# open_uplink_tcp: the broker may spend timeout_ms resolving and connecting, so the SDK waits timeout_ms plus
+# this margin for its reply instead of the generic request timeout.
+_UPLINK_REPLY_MARGIN_S = 2.0
+# Protocol bounds of an uplink request: timeout_ms is at most the largest max_connect_timeout_ms a host
+# accepts, and host is at most 253 bytes.
+_UPLINK_MAX_TIMEOUT_MS = 120_000
+_UPLINK_MAX_HOST_BYTES = 253
+_DNS_NAME_CHARACTERS = frozenset("abcdefghijklmnopqrstuvwxyz0123456789-.")
+_IPV6_LITERAL_CHARACTERS = frozenset("0123456789abcdef:.")
+_LOWERCASE_HEX_DIGITS = frozenset("0123456789abcdef")
+_SO_DOMAIN = getattr(socket, "SO_DOMAIN", 39)
 
 
 def managed_peer_authentication_required() -> bool:
@@ -79,6 +96,20 @@ def verify_manager_peer_connection(
         if not isinstance(response, dict) or response.get("ok") is not True or not isinstance(response.get("result"), dict) or response["result"].get("authorized") is not True:
             raise RuntimeError("Managed handler rejected a connection without backend manager authority")
         remaining()
+
+
+class ResourceBrokerError(RuntimeError):
+    """The resource broker refused a request.
+
+    ``code`` is the broker's stable ``error_code`` (``None`` when the reply carries none), for example
+    ``destination_blocked`` from :meth:`ResourceBrokerClient.open_uplink_tcp`. ``error`` is the broker's text
+    verbatim; it is also the exception message. Decide on ``code``, never on the text.
+    """
+
+    def __init__(self, code: str | None, error: str):
+        super().__init__(error)
+        self.code = code
+        self.error = error
 
 
 @dataclass(frozen=True)
@@ -147,43 +178,117 @@ class ResourceBrokerClient:
         sock = socket.socket(fileno=fd)
         return BrokeredSocketResult(socket=sock, metadata=metadata)
 
-    def open_approved_tcp_stream(self, *, grant_id: str) -> BrokeredSocketResult:
-        """Open one root-approved app byte stream; unsupported runtimes refuse.
+    def open_uplink_tcp(
+        self,
+        host: str,
+        port: int,
+        *,
+        timeout_s: float = 10.0,
+        tls: bool = False,
+        server_hostname: str | None = None,
+        ssl_context: ssl.SSLContext | None = None,
+    ) -> BrokeredSocketResult:
+        """Open an outbound TCP connection through the host's app uplink (managed ``role: app`` packages).
 
-        The returned AF_UNIX stream supports normal read/write and TLS wrapping.
-        The broker retains the TCP connection and shuts the stream down when its
-        exact execution or grant expires. Metadata includes the broker's execution_id.
-        This operation never opens a NIC claim.
+        The broker resolves ``host`` (a DNS name or an IP literal without brackets), applies the host's uplink
+        policy and connects within ``timeout_s``, which it shortens to the host's ``max_connect_timeout_ms``
+        (30 s by default); this call waits ``timeout_s`` plus 2 s for its reply. The
+        returned socket is a connected AF_UNIX stream that the broker relays to the TCP connection, so pass it
+        to libraries that accept a connected socket. ``metadata`` has ``kind`` (``uplink_tcp``),
+        ``connection_id``, ``lease_id``, the normalized ``host``, ``port``, ``remote_address`` and
+        ``interface``.
+
+        With ``tls=True`` the socket is wrapped with ``ssl_context`` (default ``ssl.create_default_context()``)
+        and the TLS handshake completes within ``timeout_s``; ``server_hostname`` defaults to the normalized
+        ``host``. The result's ``socket`` is then the ``ssl.SSLSocket``.
+
+        Invalid arguments raise ``ValueError`` before any request. A broker refusal raises
+        :class:`ResourceBrokerError` with its ``code`` (for example ``app_uplink_off`` or
+        ``destination_blocked``). A reply that fails the metadata or descriptor checks raises
+        ``RuntimeError``; a missing reply raises ``socket.timeout`` (``TimeoutError``). The request is sent once
+        and never replayed; every received descriptor is closed when the call raises.
         """
-        if not isinstance(grant_id, str) or not grant_id or len(grant_id.encode("utf-8")) > 256:
-            raise ValueError("grant_id must be a nonempty identifier of at most 256 bytes")
+        request = _UplinkRequest.of(host, port, timeout_s, tls, server_hostname, ssl_context)
+        opened = self._open_uplink(request)
+        if request.ssl_context is None:
+            return opened
+        raw = opened.socket
+        try:
+            previous_timeout = raw.gettimeout()
+            raw.settimeout(request.timeout_ms / 1000)
+            wrapped = request.ssl_context.wrap_socket(raw, server_hostname=request.server_hostname)
+            wrapped.settimeout(previous_timeout)
+        except BaseException:
+            # wrap_socket detaches raw first and closes its own socket when the handshake fails; this
+            # closes the descriptor when the failure came before that.
+            raw.close()
+            raise
+        return BrokeredSocketResult(socket=wrapped, metadata=opened.metadata)
+
+    async def open_uplink_connection(
+        self,
+        host: str,
+        port: int,
+        *,
+        timeout_s: float = 10.0,
+        tls: bool = False,
+        server_hostname: str | None = None,
+        ssl_context: ssl.SSLContext | None = None,
+        limit: int = 2**16,
+    ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        """Asyncio variant of :meth:`open_uplink_tcp`: returns ``asyncio.open_connection(sock=...)`` streams.
+
+        The broker request runs in the loop's default executor. With ``tls=True`` asyncio performs the TLS
+        handshake (``ssl_handshake_timeout`` is ``timeout_s``). ``limit`` is the StreamReader buffer limit.
+        Cancelling the call closes a connection the broker delivers afterwards.
+        """
+        import asyncio
+
+        request = _UplinkRequest.of(host, port, timeout_s, tls, server_hostname, ssl_context)
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+            raise ValueError("limit must be a positive integer")
+        pending = asyncio.get_running_loop().run_in_executor(None, self._open_uplink, request)
+        try:
+            opened = await asyncio.shield(pending)
+        except asyncio.CancelledError:
+            pending.add_done_callback(_close_abandoned_uplink)
+            raise
+        sock = opened.socket
+        try:
+            if request.ssl_context is None:
+                return await asyncio.open_connection(sock=sock, limit=limit)
+            return await asyncio.open_connection(
+                sock=sock, limit=limit, ssl=request.ssl_context, server_hostname=request.server_hostname,
+                ssl_handshake_timeout=request.timeout_ms / 1000,
+            )
+        except BaseException:
+            sock.close()
+            raise
+
+    def _open_uplink(self, request: _UplinkRequest) -> BrokeredSocketResult:
         metadata, fd = self._request_fd(
-            {"op": "open_approved_tcp_stream", "lease_id": self.lease_id, "grant_id": grant_id},
-            require_root=True,
+            {"op": "open_uplink_tcp", "lease_id": self.lease_id, "host": request.host, "port": request.port,
+             "timeout_ms": request.timeout_ms},
+            timeout_s=request.timeout_ms / 1000 + _UPLINK_REPLY_MARGIN_S,
         )
         sock = None
         try:
-            sock = socket.socket(fileno=fd)
-            execution_id = metadata.get("execution_id")
-            if (sock.family != socket.AF_UNIX
-                    or sock.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) != socket.SOCK_STREAM
-                    or sock.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN) != 0
-                    or metadata.get("kind") != "approved_tcp_stream"
-                    or metadata.get("grant_id") != grant_id
-                    or metadata.get("lease_id") != self.lease_id
-                    or not isinstance(execution_id, str) or len(execution_id) != 32
-                    or any(char not in "0123456789abcdef" for char in execution_id)):
-                raise RuntimeError("Invalid approved TCP stream descriptor or authority metadata")
             try:
-                sock.getpeername()
+                sock = socket.socket(fileno=fd)
             except OSError:
-                raise RuntimeError("Invalid approved TCP stream descriptor or authority metadata") from None
+                raise RuntimeError("Invalid app uplink response: the descriptor is not a socket") from None
+            problem = _uplink_problem(sock, metadata, lease_id=self.lease_id, request=request)
+            if problem is not None:
+                raise RuntimeError(f"Invalid app uplink response: {problem}")
             return BrokeredSocketResult(socket=sock, metadata=metadata)
         except BaseException:
-            if sock is None:
-                os.close(fd)
-            else:
+            if sock is not None:
                 sock.close()
+            else:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
             raise
 
     def open_tcp_socket(
@@ -297,10 +402,11 @@ class ResourceBrokerClient:
         metadata, fd = self._request_fd(request)
         return BrokeredFdResult(fd=fd, metadata=metadata)
 
-    def _request_fd(self, request: dict[str, Any], *, require_root: bool = False) -> tuple[dict[str, Any], int]:
+    def _request_fd(self, request: dict[str, Any], *, timeout_s: float | None = None) -> tuple[dict[str, Any], int]:
         # One submission: a failed receive cannot establish whether the broker
         # already performed the operation, so it must never trigger a replay.
-        deadline = time.monotonic() + _RESOURCE_REQUEST_TIMEOUT_S
+        # timeout_s is the operation's absolute budget (default: the generic request timeout).
+        deadline = time.monotonic() + (_RESOURCE_REQUEST_TIMEOUT_S if timeout_s is None else timeout_s)
 
         def remaining() -> float:
             timeout = deadline - time.monotonic()
@@ -313,13 +419,6 @@ class ResourceBrokerClient:
             try:
                 control.settimeout(remaining())
                 control.connect(self.socket_path)
-                if require_root:
-                    if sys.platform != "linux" or not hasattr(socket, "SO_PEERCRED"):
-                        raise RuntimeError("Approved streams require Linux root broker authentication")
-                    _pid, uid, _gid = struct.unpack("3i", control.getsockopt(
-                        socket.SOL_SOCKET, socket.SO_PEERCRED, struct.calcsize("3i")))
-                    if uid != 0:
-                        raise RuntimeError("Approved streams require a root-owned broker process")
                 payload = json.dumps(request, separators=(",", ":")).encode("utf-8") + b"\n"
                 control.settimeout(remaining())
                 control.sendall(payload)
@@ -363,7 +462,11 @@ class ResourceBrokerClient:
                     if not isinstance(response, dict) or not isinstance(response.get("ok"), bool):
                         raise RuntimeError("Malformed R2Kernel resource response")
                     if response["ok"] is not True:
-                        raise RuntimeError(response.get("error") or "R2Kernel resource request failed")
+                        error, code = response.get("error"), response.get("error_code")
+                        raise ResourceBrokerError(
+                            code if isinstance(code, str) and code else None,
+                            str(error) if error else "R2Kernel resource request failed",
+                        )
                     metadata = response.get("result")
                     if not isinstance(metadata, dict):
                         raise RuntimeError("Malformed R2Kernel resource response result")
@@ -377,3 +480,103 @@ class ResourceBrokerClient:
                         os.close(fd)
                     except OSError:
                         pass
+
+
+@dataclass(frozen=True)
+class _UplinkRequest:
+    """Validated arguments of one open_uplink_tcp request; ssl_context is set only with tls."""
+
+    host: str
+    port: int
+    timeout_ms: int
+    ssl_context: ssl.SSLContext | None
+    server_hostname: str | None
+
+    @classmethod
+    def of(cls, host: object, port: object, timeout_s: object, tls: object, server_hostname: object,
+           ssl_context: object) -> _UplinkRequest:
+        normalized = _normalized_uplink_host(host)
+        if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+            raise ValueError("port must be an integer in 1..65535")
+        if isinstance(timeout_s, bool) or not isinstance(timeout_s, (int, float)) or not math.isfinite(timeout_s):
+            raise ValueError("timeout_s must be a finite number of seconds")
+        timeout_ms = round(timeout_s * 1000)
+        if not 1 <= timeout_ms <= _UPLINK_MAX_TIMEOUT_MS:
+            raise ValueError("timeout_s must be between 0.001 and 120 seconds")
+        if not tls:
+            if server_hostname is not None or ssl_context is not None:
+                raise ValueError("server_hostname and ssl_context require tls=True")
+            return cls(normalized, port, timeout_ms, None, None)
+        import ssl
+
+        if server_hostname is not None and (not isinstance(server_hostname, str) or not server_hostname):
+            raise ValueError("server_hostname must be a nonempty string")
+        if ssl_context is not None and not isinstance(ssl_context, ssl.SSLContext):
+            raise ValueError("ssl_context must be an ssl.SSLContext")
+        context = ssl_context if ssl_context is not None else ssl.create_default_context()
+        return cls(normalized, port, timeout_ms, context, normalized if server_hostname is None else server_hostname)
+
+
+def _normalized_uplink_host(host: object) -> str:
+    """Return host as the broker normalizes it: lowercase, without one trailing dot."""
+    if not isinstance(host, str) or not host.isascii() or not 1 <= len(host) <= _UPLINK_MAX_HOST_BYTES:
+        raise ValueError("host must be an ASCII DNS name or IP literal of 1 to 253 bytes")
+    name = (host[:-1] if host.endswith(".") else host).lower()
+    if ":" in name:
+        if not set(name) <= _IPV6_LITERAL_CHARACTERS or not _is_ipv6_literal(name):
+            raise ValueError(f"host {host!r} is not an IPv6 literal (write it without brackets or a zone)")
+    elif not set(name) <= _DNS_NAME_CHARACTERS or "" in name.split("."):
+        raise ValueError(f"host {host!r} is not a DNS name or an IPv4 literal")
+    return name
+
+
+def _is_ipv6_literal(name: str) -> bool:
+    try:
+        ipaddress.IPv6Address(name)
+    except ValueError:
+        return False
+    return True
+
+
+def _uplink_problem(sock: socket.socket, metadata: dict[str, Any], *, lease_id: str,
+                    request: _UplinkRequest) -> str | None:
+    """Name the first failed check of an uplink reply, or None when the reply is valid."""
+    connection_id, port = metadata.get("connection_id"), metadata.get("port")
+    if metadata.get("kind") != "uplink_tcp":
+        return "metadata kind is not uplink_tcp"
+    if metadata.get("lease_id") != lease_id:
+        return "metadata lease_id is not this client's lease"
+    if (not isinstance(connection_id, str) or len(connection_id) != 32
+            or not set(connection_id) <= _LOWERCASE_HEX_DIGITS):
+        return "metadata connection_id is not 32 lowercase hexadecimal digits"
+    if isinstance(port, bool) or not isinstance(port, int) or port != request.port:
+        return "metadata port does not match the request"
+    if not _same_uplink_host(metadata.get("host"), request.host):
+        return "metadata host does not match the request"
+    if (sock.getsockopt(socket.SOL_SOCKET, _SO_DOMAIN) != socket.AF_UNIX
+            or sock.getsockopt(socket.SOL_SOCKET, socket.SO_TYPE) != socket.SOCK_STREAM
+            or sock.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN) != 0):
+        return "the descriptor is not a nonlistening AF_UNIX stream socket"
+    try:
+        sock.getpeername()
+    except OSError:
+        return "the descriptor is not connected"
+    return None
+
+
+def _same_uplink_host(reported: object, requested: str) -> bool:
+    """The reply names the requested host: the same text, or the same address for an IP literal."""
+    if not isinstance(reported, str):
+        return False
+    if reported == requested:
+        return True
+    try:
+        return ipaddress.ip_address(reported) == ipaddress.ip_address(requested)
+    except ValueError:
+        return False
+
+
+def _close_abandoned_uplink(pending: asyncio.Future[BrokeredSocketResult]) -> None:
+    """Close a connection the broker delivered after open_uplink_connection was cancelled."""
+    if not pending.cancelled() and pending.exception() is None:
+        pending.result().close()

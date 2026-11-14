@@ -53,13 +53,13 @@ set(
     R2KERNEL_RUST_CORE_DIR
     ""
     CACHE PATH
-    "Directory containing the built Rust core shared library (libr2kernel_core.*)."
+    "Directory containing the built Rust core shared library (libr2kernel_comm.*)."
 )
 set(
     R2KERNEL_RUST_CORE_INCLUDE_DIR
     ""
     CACHE PATH
-    "Directory containing the Rust core C ABI headers (r2kernel_core.h and r2kernel_core_control.h)."
+    "Directory containing the Rust core C ABI headers (r2kernel_comm.h and r2kernel_comm_control.h)."
 )
 
 if(R2KERNEL_RUST_CORE_INCLUDE_DIR STREQUAL "")
@@ -74,7 +74,7 @@ if(R2KERNEL_RUST_CORE_INCLUDE_DIR STREQUAL "")
         )
     endif()
     foreach(_candidate IN LISTS _rust_core_include_candidates)
-        if(EXISTS "${_candidate}/r2kernel_core.h" AND EXISTS "${_candidate}/r2kernel_core_control.h")
+        if(EXISTS "${_candidate}/r2kernel_comm.h" AND EXISTS "${_candidate}/r2kernel_comm_control.h")
             set(R2KERNEL_RUST_CORE_INCLUDE_DIR "${_candidate}")
             break()
         endif()
@@ -83,45 +83,45 @@ endif()
 
 find_library(
     R2KERNEL_RUST_CORE_LIBRARY
-    NAMES r2kernel_core libr2kernel_core
+    NAMES r2kernel_comm libr2kernel_comm
     PATHS "${R2KERNEL_RUST_CORE_DIR}"
     NO_DEFAULT_PATH
 )
 
 if(NOT R2KERNEL_RUST_CORE_LIBRARY)
-    find_library(R2KERNEL_RUST_CORE_LIBRARY NAMES r2kernel_core libr2kernel_core)
+    find_library(R2KERNEL_RUST_CORE_LIBRARY NAMES r2kernel_comm libr2kernel_comm)
 endif()
 
 if(NOT R2KERNEL_RUST_CORE_LIBRARY)
     message(
         FATAL_ERROR
-        "R2Kernel runtime core library not found. Install R2Kernel and set R2KERNEL_RUST_CORE_DIR to <prefix>/runtime/lib, or to the directory that contains a separately built libr2kernel_core."
+        "R2Kernel runtime core library not found. Install R2Kernel and set R2KERNEL_RUST_CORE_DIR to <prefix>/runtime/lib, or to the directory that contains a separately built libr2kernel_comm."
     )
 endif()
 
 if(
     R2KERNEL_RUST_CORE_INCLUDE_DIR STREQUAL ""
-    OR NOT EXISTS "${R2KERNEL_RUST_CORE_INCLUDE_DIR}/r2kernel_core.h"
-    OR NOT EXISTS "${R2KERNEL_RUST_CORE_INCLUDE_DIR}/r2kernel_core_control.h"
+    OR NOT EXISTS "${R2KERNEL_RUST_CORE_INCLUDE_DIR}/r2kernel_comm.h"
+    OR NOT EXISTS "${R2KERNEL_RUST_CORE_INCLUDE_DIR}/r2kernel_comm_control.h"
 )
     message(
         FATAL_ERROR
-        "Rust core C ABI headers not found. Set R2KERNEL_RUST_CORE_INCLUDE_DIR to the directory containing r2kernel_core.h and r2kernel_core_control.h."
+        "Rust core C ABI headers not found. Set R2KERNEL_RUST_CORE_INCLUDE_DIR to the directory containing r2kernel_comm.h and r2kernel_comm_control.h."
     )
 endif()
 
 find_package(Threads REQUIRED)
-if(NOT TARGET r2kernel::core)
+if(NOT TARGET r2kernel::comm)
     if(WIN32)
-        add_library(r2kernel::core UNKNOWN IMPORTED GLOBAL)
+        add_library(r2kernel::comm UNKNOWN IMPORTED GLOBAL)
     else()
-        add_library(r2kernel::core SHARED IMPORTED GLOBAL)
+        add_library(r2kernel::comm SHARED IMPORTED GLOBAL)
     endif()
-    set_target_properties(r2kernel::core PROPERTIES IMPORTED_LOCATION "${R2KERNEL_RUST_CORE_LIBRARY}")
+    set_target_properties(r2kernel::comm PROPERTIES IMPORTED_LOCATION "${R2KERNEL_RUST_CORE_LIBRARY}")
     if(UNIX AND NOT APPLE)
         # Rust cdylibs need not carry DT_SONAME. Link by basename so neither
         # this SDK nor its consumers acquire an absolute Core DT_NEEDED path.
-        set_target_properties(r2kernel::core PROPERTIES IMPORTED_NO_SONAME TRUE)
+        set_target_properties(r2kernel::comm PROPERTIES IMPORTED_NO_SONAME TRUE)
     endif()
 endif()
 
@@ -157,6 +157,14 @@ set_target_properties(r2kernel_cpp_objects PROPERTIES
 )
 target_compile_features(r2kernel_cpp_objects PUBLIC cxx_std_17)
 target_compile_definitions(r2kernel_cpp_objects PRIVATE R2KERNEL_CPP_BUILDING)
+# A static yaml-cpp (the release builds link libyaml-cpp.a) is compiled against
+# with YAML_CPP_STATIC_DEFINE, as yaml-cpp's own CMake package adds for a static
+# build. Without it yaml-cpp 0.8 headers give its classes default visibility,
+# and the inline members the SDK instantiates are exported from
+# libr2kernel_cpp, which --exclude-libs cannot hide (cross-audit RELEASE-112-01).
+if(R2KERNEL_YAML_CPP_LIBRARY MATCHES "\\.a$")
+    target_compile_definitions(r2kernel_cpp_objects PRIVATE YAML_CPP_STATIC_DEFINE)
+endif()
 target_include_directories(r2kernel_cpp_objects
     PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/include"
@@ -164,7 +172,7 @@ target_include_directories(r2kernel_cpp_objects
     PRIVATE
         ${R2KERNEL_YAML_CPP_INCLUDE_DIR}
 )
-target_link_libraries(r2kernel_cpp_objects PUBLIC r2kernel::core PRIVATE ${R2KERNEL_YAML_CPP_TARGET} Threads::Threads)
+target_link_libraries(r2kernel_cpp_objects PUBLIC r2kernel::comm PRIVATE ${R2KERNEL_YAML_CPP_TARGET} Threads::Threads)
 if(MSVC)
     target_compile_options(r2kernel_cpp_objects PRIVATE /W4)
 else()
@@ -187,15 +195,29 @@ target_include_directories(r2kernel_cpp
         $<BUILD_INTERFACE:${R2KERNEL_RUST_CORE_INCLUDE_DIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
-target_link_libraries(r2kernel_cpp PUBLIC r2kernel::core PRIVATE ${R2KERNEL_YAML_CPP_TARGET} Threads::Threads)
+target_link_libraries(r2kernel_cpp PUBLIC r2kernel::comm PRIVATE ${R2KERNEL_YAML_CPP_TARGET} Threads::Threads)
+# Only the SDK's own API is exported: a statically linked yaml-cpp (the release
+# builds link libyaml-cpp.a) stays internal instead of joining the 1.x ABI
+# (cross-audit RELEASE-112-01).
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_options(r2kernel_cpp PRIVATE "LINKER:--exclude-libs,ALL")
+endif()
 
 if(BUILD_TESTING)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_NM)
+        add_test(NAME r2kernel_cpp_exports_test
+            COMMAND "${CMAKE_COMMAND}" "-DLIBRARY=$<TARGET_FILE:r2kernel_cpp>" "-DNM=${CMAKE_NM}"
+                    -P "${CMAKE_CURRENT_SOURCE_DIR}/tests/check_exports.cmake")
+    endif()
     # Cases shared with the Python SDK tests (tests/test_sdk_parity_cases.py);
     # absent from a copy of this directory alone.
     set(_parity_cases "${CMAKE_CURRENT_SOURCE_DIR}/../testdata/parity")
     # Golden Control wire fixtures shared with the backend and the Python SDK
     # tests (tests/test_wire_contract_fixtures.py); absent from a copy of this directory alone.
     set(_wire_fixtures "${CMAKE_CURRENT_SOURCE_DIR}/../testdata/wire")
+    # The public spec tree beside the SDKs, the installed standard dictionary of
+    # the tests that need one; absent from a copy of this directory alone.
+    set(_spec_dictionary "${CMAKE_CURRENT_SOURCE_DIR}/../../spec")
     # Test-only static copy of the SDK objects, so white-box tests can reach
     # internal (non-exported) declarations. Never installed.
     add_library(r2kernel_cpp_internal STATIC $<TARGET_OBJECTS:r2kernel_cpp_objects>)
@@ -203,7 +225,7 @@ if(BUILD_TESTING)
     target_compile_definitions(r2kernel_cpp_internal INTERFACE R2KERNEL_CPP_BUILDING)
     target_include_directories(r2kernel_cpp_internal PUBLIC
         "${CMAKE_CURRENT_SOURCE_DIR}/include" "${R2KERNEL_RUST_CORE_INCLUDE_DIR}")
-    target_link_libraries(r2kernel_cpp_internal PUBLIC r2kernel::core ${R2KERNEL_YAML_CPP_TARGET} Threads::Threads)
+    target_link_libraries(r2kernel_cpp_internal PUBLIC r2kernel::comm ${R2KERNEL_YAML_CPP_TARGET} Threads::Threads)
     # Offline Subsystem regressions sharing tests/subsystem_offline_fixture.hpp.
     foreach(_offline_test IN ITEMS subsystem_lifecycle subsystem_registration subsystem_parity raw_control_metadata
             event_registration_rollback)
@@ -286,7 +308,20 @@ if(BUILD_TESTING)
             target_link_libraries(r2kernel_cpp_sdk_parity_cases_test PRIVATE r2kernel_cpp ${R2KERNEL_YAML_CPP_TARGET})
             target_compile_definitions(r2kernel_cpp_sdk_parity_cases_test PRIVATE
                 R2KERNEL_SDK_PARITY_DIR="${_parity_cases}")
+            if(EXISTS "${_spec_dictionary}")
+                target_compile_definitions(r2kernel_cpp_sdk_parity_cases_test PRIVATE
+                    R2KERNEL_SDK_SPEC_DIR="${_spec_dictionary}")
+            endif()
             add_test(NAME r2kernel_cpp_sdk_parity_cases_test COMMAND r2kernel_cpp_sdk_parity_cases_test)
+        endif()
+        if(EXISTS "${_spec_dictionary}")
+            # spatial_ports frames and the reserved standard IDs (Python tests/test_spatial_frame_ports.py).
+            add_executable(r2kernel_cpp_spatial_frame_ports_test tests/spatial_frame_ports_test.cpp)
+            target_include_directories(r2kernel_cpp_spatial_frame_ports_test PRIVATE ${R2KERNEL_YAML_CPP_INCLUDE_DIR})
+            target_link_libraries(r2kernel_cpp_spatial_frame_ports_test PRIVATE r2kernel_cpp_internal)
+            target_compile_definitions(r2kernel_cpp_spatial_frame_ports_test PRIVATE
+                R2KERNEL_SDK_SPEC_DIR="${_spec_dictionary}")
+            add_test(NAME r2kernel_cpp_spatial_frame_ports_test COMMAND r2kernel_cpp_spatial_frame_ports_test)
         endif()
         add_executable(r2kernel_cpp_subsystem_runtime_queries_test tests/subsystem_runtime_queries_test.cpp)
         target_link_libraries(r2kernel_cpp_subsystem_runtime_queries_test PRIVATE r2kernel_cpp Threads::Threads)
@@ -370,8 +405,8 @@ install(FILES "${R2KERNEL_RUST_CORE_LIBRARY}" DESTINATION ${CMAKE_INSTALL_LIBDIR
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(
     FILES
-        "${R2KERNEL_RUST_CORE_INCLUDE_DIR}/r2kernel_core.h"
-        "${R2KERNEL_RUST_CORE_INCLUDE_DIR}/r2kernel_core_control.h"
+        "${R2KERNEL_RUST_CORE_INCLUDE_DIR}/r2kernel_comm.h"
+        "${R2KERNEL_RUST_CORE_INCLUDE_DIR}/r2kernel_comm_control.h"
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 

@@ -1,15 +1,33 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
 
-_ROOT = next(
-    parent
-    for parent in Path(__file__).resolve().parents
-    if (parent / "subsystems").is_dir() and (parent / "simulator").is_dir()
-)
+def _tutorial_root() -> Path:
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "subsystems").is_dir() and (parent / "simulator").is_dir():
+            return parent
+    candidates = [
+        os.environ.get("R2KERNEL_TUTORIAL_ROOT"),
+        str(Path(os.environ.get("R2KERNEL_HOME", "/opt/r2kernel")) / "tutorials"),
+        "/opt/r2kernel/tutorials",
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        root = Path(candidate)
+        if (root / "subsystems").is_dir() and (root / "simulator").is_dir():
+            return root
+    raise RuntimeError(
+        "could not locate R2Kernel tutorial runtime; set R2KERNEL_TUTORIAL_ROOT or install tutorials under /opt/r2kernel/tutorials"
+    )
+
+
+_ROOT = _tutorial_root()
 _SUPPORT_PY = _ROOT / "support" / "python"
 if str(_SUPPORT_PY) not in sys.path:
     sys.path.insert(0, str(_SUPPORT_PY))

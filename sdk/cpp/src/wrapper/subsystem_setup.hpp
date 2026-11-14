@@ -304,6 +304,8 @@ Subsystem::Subsystem(SubsystemOptions options)
     // is registered, so static Subsystem instances unregister before it ends.
     (void)subsystem_initialization_registry();
     config_ = detail::load_subsystem_config(user_data_path_);
+    // The launcher's package spec roots are searched before the installed dictionary.
+    validate_package_spec_roots(caller_package_spec_roots());
     const auto construction_context = schema_roots_ ? std::make_shared<SchemaContext>(*schema_roots_)
                                                      : std::make_shared<SchemaContext>();
     contract_loader::InventoryScope construction_inventory(std::make_shared<contract_loader::Inventory>(construction_context));
@@ -347,6 +349,7 @@ Subsystem::Subsystem(SubsystemOptions options)
         provided_control_topics_ = std::move(provided.controls);
         const auto allowed = allowed_endpoint_sets(manifest);
         allowed_event_publish_topics_ = allowed.publishes;
+        published_frame_checks_ = package_provided_frame_checks(manifest);
         allowed_event_subscribe_topics_ = allowed.subscribes;
         allowed_control_topics_ = allowed.controls;
         allowed_procedure_names_ = allowed.procedures;
@@ -803,7 +806,7 @@ ContractValidationReport Subsystem::validate_runtime_contract_types(const std::s
         ContractValidationReport report;
         report.issues.push_back(ValidationIssue{effective_policy == "strict" ? "error" : "warning",
             "schema_runtime_unavailable",
-            std::string("contract type validation requires r2kernel-core schema runtime: ") + error.what(),
+            std::string("contract type validation requires r2kernel-comm schema runtime: ") + error.what(),
             "runtime_contract_types"});
         return report;
     }

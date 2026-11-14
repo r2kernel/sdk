@@ -7,6 +7,8 @@ from abc import abstractmethod
 from pathlib import Path
 from typing import Any, Callable, Optional, TYPE_CHECKING
 
+from r2kernel.contract.dictionary import caller_package_spec_roots, validate_package_spec_roots
+from r2kernel.contract.loader import ContractSpecError
 from r2kernel.core import SubsystemRuntime
 from r2kernel.core.constants import DEFAULT_HEARTBEAT_PORT
 from r2kernel.core.control_client import exchange_control_request
@@ -21,6 +23,7 @@ from r2kernel.manifest import (
     ManifestError,
     SubsystemManifest,
     allowed_runtime_endpoints,
+    provided_frame_ports,
 )
 from ._subsystem_communication import _CommunicationMixin
 from ._subsystem_lifecycle import LOG_ID_LIFECYCLE, _LifecycleMixin
@@ -66,6 +69,11 @@ class Subsystem(_CommunicationMixin, _LifecycleMixin, _SelfBindingMixin, Loggabl
         self._termination_entry = threading.local()
         self._spatial_lock = threading.RLock()
         self._spatial_transforms: dict[str, dict[str, Any]] = {}
+        try:
+            # The launcher's package spec roots are searched before the installed dictionary.
+            validate_package_spec_roots(caller_package_spec_roots())
+        except ContractSpecError as exc:
+            raise RuntimeError(str(exc)) from exc
         self._subsystem_manifest = self._load_required_subsystem_manifest(manifest_path)
         self._validate_expected_role()
         self._launch_bindings = self._load_launch_bindings()
@@ -79,6 +87,10 @@ class Subsystem(_CommunicationMixin, _LifecycleMixin, _SelfBindingMixin, Loggabl
         self._declared_apis: list[str] = list(self._subsystem_manifest.declared_apis)
         self._declared_components: list[str] = list(self._subsystem_manifest.declared_components)
         self._allowed_runtime_endpoints = allowed_runtime_endpoints(self._subsystem_manifest)
+        try:
+            self._published_frame_ports = provided_frame_ports(self._subsystem_manifest)
+        except ManifestError as exc:
+            raise RuntimeError(str(exc)) from exc
 
     @property
     def name(self) -> str:

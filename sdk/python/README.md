@@ -277,9 +277,11 @@ local Control and Event use Unix sockets and
 are unaffected. When a lifecycle hook fails with an `EPERM` raised by creating a socket
 (`socket.socket`) while `R2KERNEL_SANDBOX_NETWORK=brokered` (or
 `R2KERNEL_SANDBOX_CAN=brokered`) is set and the process is actually denied, the SDK logs
-which socket families are denied and the alternatives permitted by the package's
-grants: declared frontend listeners, R2Kernel interfaces or leader-passed descriptors.
-Generic TCP/UDP/CAN broker requests still require their own resource grants.
+which socket families are denied and the alternatives: the
+[app uplink](#app-uplink-outbound-connections) (`open_uplink_tcp`) for outbound TCP, sockets
+authorized by the package's grants, declared frontend listeners, R2Kernel interfaces or
+leader-passed descriptors. Generic TCP/UDP/CAN broker requests still require their own resource
+grants.
 An `EPERM` from any other call is not explained this way. A hook that
 returns `False` is logged as `"<Phase> failed: <phase> hook returned False (no exception)"`,
 followed by `"; last warning or error logged during <phase>: ..."` when that hook's own
@@ -371,14 +373,114 @@ The SDK reads these variables; launchers set the deployment-specific ones.
 | `R2KERNEL_LOG_DIR` | `<prefix>/log`, else `~/.r2kernel/log` | Library log directory. |
 | `R2KERNEL_FORCE_PYTHON` | off | `1` selects the pure-Python Event, topic-buffer and lock implementations instead of the native core (tests and diagnostics). |
 
-## Approved app outbound streams
+## App uplink (outbound connections)
 
-`ResourceBrokerClient.open_approved_tcp_stream` opens one root-approved TCP
-endpoint for the current broker-created app execution. The app receives a
-connected AF_UNIX stream, while the broker retains the TCP socket and can
-revoke every duplicate of the stream. The SDK validates the root broker,
-lease/grant identifiers, execution ID and actual connected stream descriptor.
-It does not fall back to direct sockets or another role on older runtimes.
+A managed `role: app` package opens an outbound TCP connection with
+`ResourceBrokerClient.open_uplink_tcp(host, port, *, timeout_s=10.0, tls=False,
+server_hostname=None, ssl_context=None)`. The root broker resolves the name, applies the host's
+uplink policy and connects. The app receives `BrokeredSocketResult` with a connected AF_UNIX
+stream in `socket`, which the broker relays to the TCP connection. `metadata` has `kind`
+(`uplink_tcp`), `connection_id`, `lease_id`, the normalized `host`, `port`, `remote_address` and
+`interface`. `R2KernelClient` offers the same call. `open_uplink_connection(...)` takes the same
+arguments plus `limit` and returns asyncio `(reader, writer)` streams. The broker closes the
+stream (the app reads EOF) when the lease ends, after a policy change, or when a gateway claims
+the interface.
 
-Root provisioning, renewal, revocation, snapshot access and application TLS/API
-authentication are described in [Approved App Connections](../../../docs/docs/operate/app-outbound-connections.md).
+`host` is a DNS name or an IP literal without brackets; the request carries it in lowercase,
+without a trailing dot. The reply's `host` is the normalized form: the name, or the IP literal in
+canonical text (IPv4 dotted decimal, IPv6 compressed). The broker resolves and connects within
+`timeout_s` (1 ms to 120 s); it shortens a longer timeout to the host's `max_connect_timeout_ms`,
+which defaults to 30 s. The SDK waits `timeout_s` plus 2 s for the reply and sends the request
+once. With `tls=True` the socket is wrapped with
+`ssl_context`, or `ssl.create_default_context()`, and the handshake completes within `timeout_s`;
+`server_hostname` defaults to the normalized `host`. The SDK checks the reply's kind, lease,
+connection ID, host and port, and that the descriptor is a connected AF_UNIX stream. A mismatch
+closes the descriptor and raises `RuntimeError`. Invalid arguments raise `ValueError` before any
+request.
+
+Whether apps may connect out is a host setting, not a package one. The uplink mode is `auto`
+(the default: any interface that no gateway uses), `explicit` (listed interfaces only) or `off`.
+It is chosen at installation (`--app-uplink`) and changed with
+`r2kernel-resourced --set-app-uplink`, which applies after a resourced restart. A package declares
+nothing. Device networks, loopback, the host's own addresses, link-local, multicast and broadcast
+destinations are always blocked, and the host may add a destination allowlist.
+
+A refusal raises `ResourceBrokerError` (`from r2kernel.core import ResourceBrokerError`, a
+`RuntimeError`). Its message is the broker's text and its `code` is stable:
+
+| `code` | Meaning |
+| --- | --- |
+| `invalid_request` | bad host, port or timeout |
+| `uplink_role_refused` | the package role is not `app` |
+| `app_uplink_off` | the host's uplink is `off` or not configured |
+| `uplink_unavailable` | the broker cannot determine the device networks, so it refuses |
+| `destination_not_allowed` | the host has an allowlist and nothing matches |
+| `destination_blocked` | every address is blocked or has no eligible route; the message gives the reason per address |
+| `resolve_failed` | the name did not resolve |
+| `connect_timeout` | resolving or connecting used up `timeout_s` |
+| `connect_failed` | every connect attempt failed; the message has the last error |
+| `uplink_limit` | a connection limit of the host or the lease is reached |
+
+Other broker requests raise `ResourceBrokerError` too, with their own codes (for example an
+unknown lease).
+
+The package's sandbox (`resources.sandbox.network: brokered`) refuses every socket except
+AF_UNIX. A library that creates its own socket therefore fails with `EPERM`; this includes
+`urllib.request` and `requests`. Use libraries that accept a connected socket, such as `ssl`,
+`http.client`, `asyncio` and `websockets`:
+
+```python
+import http.client
+
+from r2kernel.core import ResourceBrokerClient
+
+opened = ResourceBrokerClient().open_uplink_tcp("robot-2.example.net", 8001)
+connection = http.client.HTTPConnection("robot-2.example.net", 8001)
+connection.sock = opened.socket  # already connected: http.client sends on it as is
+connection.request("GET", "/api/status")
+print(connection.getresponse().read())
+connection.close()  # also closes the uplink
+```
+
+For HTTPS, open the uplink with `tls=True` and set it on `http.client.HTTPSConnection` in the
+same way. `http.client` opens its own socket to reconnect once the server closes the connection;
+open a new uplink instead.
+
+```python
+import asyncio
+
+import websockets
+
+from r2kernel.core import ResourceBrokerClient
+
+
+async def main(sock):
+    # websockets performs the TLS of wss:// itself, so the uplink is opened without tls.
+    async with websockets.connect("wss://events.example.com/stream", sock=sock) as websocket:
+        print(await websocket.recv())
+
+
+opened = ResourceBrokerClient().open_uplink_tcp("events.example.com", 443)
+asyncio.run(main(opened.socket))
+```
+
+```python
+async def fetch_status():
+    reader, writer = await ResourceBrokerClient().open_uplink_connection("api.example.com", 443, tls=True)
+    writer.write(b"GET /status HTTP/1.1\r\nHost: api.example.com\r\nConnection: close\r\n\r\n")
+    response = await reader.read()
+    writer.close()
+    await writer.wait_closed()
+    return response
+```
+
+The uplink carries bytes only: certificate checks, API authentication and the remote service's
+authorization remain the application's. The host setting, the blocked destinations and the
+fleet-control pattern are described in
+[App Network Access](../../../docs/docs/operate/app-outbound-connections.md).
+
+## License
+
+The SDK source is licensed under Apache-2.0. The `libr2kernel_comm` binary
+bundled with the SDK packages is distributed under the R2Kernel Runtime License
+until its source is published.

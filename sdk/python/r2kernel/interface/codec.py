@@ -93,7 +93,7 @@ def _generic_codec_output(lib):
         try:
             function = getattr(lib, name)
         except AttributeError as exc:
-            raise RuntimeError(f"Generic message codec requires the updated r2kernel-core library ({name})") from exc
+            raise RuntimeError(f"Generic message codec requires the updated r2kernel-comm library ({name})") from exc
         function.argtypes = [ctypes.c_char_p, ctypes.c_char_p, ctypes.c_size_t, ctypes.c_void_p]
         function.restype = ctypes.c_int
     return _Workspace(lib)

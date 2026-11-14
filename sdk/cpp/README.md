@@ -6,8 +6,9 @@ This SDK combines:
 - `r2kernel/core/*`: control-facing runtime client
 - `r2kernel/wrapper/*`: subsystem base components, declaration metadata, and surface registration helpers
 
-The transport implementation is provided by the installed R2Kernel runtime core
-library, but C++ users consume a single SDK project.
+The transport implementation is provided by the installed R2Kernel
+communication library `libr2kernel_comm` (CMake target `r2kernel::comm`), but
+C++ users consume a single SDK project.
 
 ## Layout
 - `include/r2kernel/core`: public runtime client API
@@ -480,15 +481,17 @@ layout, so both SDKs read each other's file back to the same values
 requests brokered descriptors from `r2kernel-resourced` with
 `R2KERNEL_RESOURCE_LEASE_ID` and `R2KERNEL_RESOURCE_SERVICE_SOCKET`:
 `open_udp_socket`, `open_tcp_socket`, `open_frontend_tcp_listener`,
-`open_can_socket` (option structs) and `open_device(path, options)` return
-`BrokeredSocketResult` / `BrokeredFdResult` (a close-on-exec descriptor the
-caller owns and the broker's result as `metadata_json`); `inherited_fd` is
-`inherited_socket`. Each request is sent once within 5 s; a refusal or an
-invalid reply throws `std::runtime_error` and closes every received
-descriptor. `R2KernelClient` offers the same `open_*` calls. Low-level shared
-memory is the C ABI (`r2kernel_shm_publish`, `r2kernel_shm_read_snapshot`,
-`r2kernel_shm_reset_slot` in `r2kernel_core.h`); there is no C++ counterpart of
-Python's `TopicBufferPool`.
+`open_can_socket`, `open_uplink_tcp` (option structs) and
+`open_device(path, options)` return `BrokeredSocketResult` / `BrokeredFdResult`
+(a close-on-exec descriptor the caller owns and the broker's result as
+`metadata_json`); `inherited_fd` is `inherited_socket`. Each request is sent
+once within 5 s (`open_uplink_tcp`: its timeout plus 2 s). A refusal throws
+`ResourceBrokerError`, a `std::runtime_error` whose `code()` is the broker's
+stable error code; an invalid reply throws `std::runtime_error`. Both close
+every received descriptor. `R2KernelClient` offers the same `open_*` calls.
+Low-level shared memory is the C ABI (`r2kernel_shm_publish`,
+`r2kernel_shm_read_snapshot`, `r2kernel_shm_reset_slot` in `r2kernel_comm.h`);
+there is no C++ counterpart of Python's `TopicBufferPool`.
 
 ## Status and custom core clients
 
@@ -559,7 +562,7 @@ Install native build tools first:
 sudo apt install -y build-essential cmake
 ```
 
-Build against the installed runtime core library from the R2Kernel runtime
+Build against the installed `libr2kernel_comm` from the R2Kernel runtime
 prefix (`<prefix>` below is the R2Kernel installation prefix):
 
 ```bash
@@ -568,8 +571,8 @@ cmake -S sdk/cpp -B build/r2kernel-client-cpp \
 cmake --build build/r2kernel-client-cpp
 ```
 
-CMake looks for the C ABI headers (`r2kernel_core.h` and
-`r2kernel_core_control.h`) next to that library directory, including the
+CMake looks for the C ABI headers (`r2kernel_comm.h` and
+`r2kernel_comm_control.h`) next to that library directory, including the
 installed C++ SDK under `<prefix>/sdk/cpp/include`. Without an installed C++ SDK,
 or to use the headers that ship with this checkout under `runtime/core/include`,
 set the header directory explicitly:
@@ -618,7 +621,7 @@ Installed contents include:
 - C++ headers under `include/r2kernel/...`
 - `libr2kernel_cpp.*` (on Linux the chain `libr2kernel_cpp.so` ->
   `libr2kernel_cpp.so.1` -> `libr2kernel_cpp.so.1.0.0`)
-- the Rust core shared library dependency
+- the communication library `libr2kernel_comm` the SDK links to
 - CMake package files under `lib/cmake/r2kernel_cpp`
 
 ### Library versioning and exported symbols
@@ -674,14 +677,90 @@ provider diagnostic in `error_message`; failure payloads are not decoded using
 the success schema. Timed replies retain their existing response metadata and
 application status contract. No new envelope or public API/ABI is introduced.
 
-## Approved app outbound streams
+## App uplink (outbound connections)
 
-`ResourceBrokerClient::open_approved_tcp_stream` opens one root-approved TCP
-endpoint for the current broker-created app execution. The app receives a
-connected AF_UNIX stream, while the broker retains the TCP socket and can
-revoke every duplicate of the stream. The SDK validates the root broker,
-lease/grant identifiers, execution ID and actual connected stream descriptor.
-It does not fall back to direct sockets or another role on older runtimes.
+A managed `role: app` package opens an outbound TCP connection with
+`ResourceBrokerClient::open_uplink_tcp(const UplinkTcpOptions&)`, also on
+`R2KernelClient`. The root broker resolves `host` (a DNS name or an IP literal
+without brackets), applies the host's uplink policy and connects within
+`timeout` (default 10 s, 1 ms to 120 s). The broker shortens a longer timeout
+to the host's `max_connect_timeout_ms`, which defaults to 30 s. The SDK waits
+`timeout` plus 2 s for the reply and sends the request once. The result's
+`socket` is a connected, close-on-exec AF_UNIX stream that the broker relays to
+the TCP connection. `metadata_json` has `kind` (`uplink_tcp`), `connection_id`,
+`lease_id`, the normalized `host` (a name in lowercase without a trailing dot,
+or the IP literal in canonical text: IPv4 dotted decimal, IPv6 compressed),
+`port`, `remote_address` and `interface`. The broker closes the stream (the app
+reads EOF) when the lease ends, after a policy change, or when a gateway claims
+the interface. The checks match the Python SDK's `open_uplink_tcp`: a reply
+whose kind, lease, connection ID, host, port or descriptor does not match
+throws `std::runtime_error` after closing the descriptor, and invalid options
+throw `std::invalid_argument` before any request. TLS is left to the caller's
+library.
 
-Root provisioning, renewal, revocation, snapshot access and application TLS/API
-authentication are described in [Approved App Connections](../../../docs/docs/operate/app-outbound-connections.md).
+Whether apps may connect out is a host setting, not a package one. The uplink
+mode is `auto` (the default: any interface that no gateway uses), `explicit`
+(listed interfaces only) or `off`. It is chosen at installation
+(`--app-uplink`) and changed with `r2kernel-resourced --set-app-uplink`, which
+applies after a resourced restart. A package declares nothing. Device
+networks, loopback, the host's own addresses, link-local, multicast and
+broadcast destinations are always blocked, and the host may add a destination
+allowlist.
+
+A refusal throws `r2kernel::core::ResourceBrokerError`; `what()` is the
+broker's text and `code()` is stable:
+
+| `code()` | Meaning |
+| --- | --- |
+| `invalid_request` | bad host, port or timeout |
+| `uplink_role_refused` | the package role is not `app` |
+| `app_uplink_off` | the host's uplink is `off` or not configured |
+| `uplink_unavailable` | the broker cannot determine the device networks, so it refuses |
+| `destination_not_allowed` | the host has an allowlist and nothing matches |
+| `destination_blocked` | every address is blocked or has no eligible route; the message gives the reason per address |
+| `resolve_failed` | the name did not resolve |
+| `connect_timeout` | resolving or connecting used up the timeout |
+| `connect_failed` | every connect attempt failed; the message has the last error |
+| `uplink_limit` | a connection limit of the host or the lease is reached |
+
+```cpp
+#include <sys/socket.h>
+
+#include <iostream>
+#include <string>
+
+#include "r2kernel/core/resource_broker_client.hpp"
+
+r2kernel::core::UplinkTcpOptions options;
+options.host = "robot-2.example.net";
+options.port = 8001;
+try {
+    auto uplink = r2kernel::core::ResourceBrokerClient().open_uplink_tcp(options);
+    const std::string request =
+        "GET /api/status HTTP/1.1\r\nHost: robot-2.example.net:8001\r\nConnection: close\r\n\r\n";
+    ::send(uplink.socket, request.data(), request.size(), MSG_NOSIGNAL);
+    char reply[4096];
+    const ssize_t received = ::recv(uplink.socket, reply, sizeof(reply), 0);
+    if (received > 0) std::cout.write(reply, received);
+    uplink.close();
+} catch (const r2kernel::core::ResourceBrokerError& refused) {
+    // For example "app_uplink_off" or "destination_blocked".
+    std::cerr << "uplink refused: " << refused.code() << ": " << refused.what() << '\n';
+}
+```
+
+The package's sandbox (`resources.sandbox.network: brokered`) refuses every
+socket except AF_UNIX, so a library that opens its own TCP socket fails with
+`EPERM`. Use libraries that accept a connected descriptor, for example
+OpenSSL with `SSL_set_fd(ssl, uplink.socket)`, the expected server name for SNI
+and certificate verification. The uplink carries bytes only: API
+authentication and the remote service's authorization remain the
+application's. The host setting, the blocked destinations and the
+fleet-control pattern are described in
+[App Network Access](../../../docs/docs/operate/app-outbound-connections.md).
+
+## License
+
+The SDK source is licensed under Apache-2.0. The `libr2kernel_comm` binary
+bundled with the SDK packages is distributed under the R2Kernel Runtime License
+until its source is published.

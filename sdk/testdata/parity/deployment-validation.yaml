@@ -77,6 +77,23 @@ shared:
         sensor: {direction: import, semantic: observation_frame, frame: sensor}
     provides:
       localization: {contract: tutorial.localization.v1, visibility: internal}
+  odometry_v2_base: &odometry_v2_base |
+    kind: r2kernel.subsystem
+    version: 1
+    subsystem: {name: base, role: component}
+    spatial:
+      participation: required
+      ports:
+        reference: {direction: export, semantic: odometry_reference, frame: odom}
+        body: {direction: export, semantic: mobile_body, frame: base_link}
+    provides:
+      mobile_base: {contract: component.mobile_base.odometry.v2}
+  odometry_v1_consumer: &odometry_v1_consumer |
+    kind: r2kernel.subsystem
+    version: 1
+    subsystem: {name: localizer, role: component}
+    requires:
+      odometry: {contract: component.mobile_base.odometry.v1}
 
 cases:
   # Deployment manifests -----------------------------------------------------
@@ -142,6 +159,58 @@ cases:
           server: {manifest: ./server.subsystem.yaml}
         bindings:
           client.service: {to: server.service}
+  - name: deployment_odometry_v1_consumer_v2_provider
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: reject
+    error: "Binding contract mismatch: localizer.odometry requires component.mobile_base.odometry.v1, but base.mobile_base provides component.mobile_base.odometry.v2"
+    files:
+      base.subsystem.yaml: *odometry_v2_base
+      localizer.subsystem.yaml: *odometry_v1_consumer
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        subsystems:
+          base: {manifest: ./base.subsystem.yaml}
+          localizer: {manifest: ./localizer.subsystem.yaml}
+        bindings:
+          localizer.odometry: {to: base.mobile_base}
+  - name: deployment_odometry_v1_instance_beside_v2_provider
+    load: deployment
+    path: r2kernel.deployment.yaml
+    expect: accept
+    files:
+      base.subsystem.yaml: *odometry_v2_base
+      base_v1.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: base, role: component}
+        spatial:
+          participation: required
+          ports:
+            reference: {direction: export, semantic: odometry_reference, frame: odom}
+            body: {direction: export, semantic: mobile_body, frame: base_link}
+        provides:
+          mobile_base: {contract: component.mobile_base.odometry.v1}
+      localizer.subsystem.yaml: *odometry_v1_consumer
+      navigation.subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: navigation, role: component}
+        requires:
+          mobility: {contract: component.mobile_base.odometry.v2}
+      r2kernel.deployment.yaml: |
+        kind: r2kernel.deployment
+        version: 1
+        subsystems:
+          base: {manifest: ./base.subsystem.yaml}
+          localizer: {manifest: ./localizer.subsystem.yaml}
+          navigation: {manifest: ./navigation.subsystem.yaml}
+        instances:
+          base.odometry_v1: {manifest: ./base_v1.subsystem.yaml}
+        bindings:
+          localizer.odometry: {to: base.odometry_v1.mobile_base}
+          navigation.mobility: {to: base.mobile_base}
   - name: deployment_missing_required_binding
     load: deployment
     path: r2kernel.deployment.yaml

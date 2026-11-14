@@ -1,4 +1,4 @@
-#include "r2kernel_core.h"
+#include "r2kernel_comm.h"
 #include "r2kernel/wrapper/subsystem.hpp"
 #include "../src/wrapper/control_dispatch_publication.hpp"
 

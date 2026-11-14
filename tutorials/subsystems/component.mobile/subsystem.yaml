@@ -25,4 +25,4 @@ requires:
 
 provides:
   mobile_base:
-    contract: component.mobile_base.odometry.v1
+    contract: component.mobile_base.odometry.v2

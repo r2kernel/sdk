@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <filesystem>
 #include <string>
@@ -13,6 +14,16 @@ struct ApiEventSpec {
     std::string topic;
     std::string type;
     std::string direction;
+    // For a spatial_ports API and a published event: the wire index of each
+    // frames.ports field (ApiContractSpec::frame_ports order) in the event's message.
+    std::vector<std::size_t> frame_field_indexes;
+};
+
+// One frames.ports entry: a string field of every published message and the
+// provider spatial port whose frame it must carry.
+struct ApiFramePort {
+    std::string field;
+    std::string port;
 };
 
 struct ApiControlSpec {
@@ -46,7 +57,13 @@ struct ApiContractSpec {
     std::vector<ApiOperationSpec> operations;
     // Names declared under the contract's local `messages:` map.
     std::vector<std::string> messages;
+    // frames.policy; spatial_ports is validated and fills frame_ports, any
+    // other policy remains metadata.
+    std::string frame_policy;
+    std::vector<ApiFramePort> frame_ports;
 };
+
+inline constexpr const char* kSpatialPortsFramePolicy = "spatial_ports";
 
 struct ComponentContractSpec {
     std::string id;

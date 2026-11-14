@@ -191,7 +191,7 @@ class CompoundBoundaryTest(unittest.TestCase):
         )
         api = load_yaml(standard_contract_path(contract))
         component = load_yaml(
-            STANDARD_SPEC_ROOT / "components" / "component" / "mobile_base" / "odometry" / "v1.yaml"
+            STANDARD_SPEC_ROOT / "components" / "component" / "mobile_base" / "odometry" / "v2.yaml"
         )
         self.assertEqual(api["id"], contract)
         self.assertFalse(api.get("controls"))

@@ -1,0 +1,21 @@
+version: 1
+id: msg.locomotion.mobile_base.v2
+kind: message_set
+description: Wheeled mobile-base odometry with required provider frames. The other mobile-base messages remain in msg.locomotion.mobile_base.v1.
+imports:
+  msg.core.spatial: v1
+messages:
+  Odometry:
+    description: Estimated body pose and twist for a wheeled platform.
+    fields:
+    - name: frame_id
+      type: string
+      description: The provider's odometry reference frame, equal to the frame of its spatial `reference` port.
+    - name: child_frame_id
+      type: string
+      description: The provider's body frame, equal to the frame of its spatial `body` port.
+    - name: pose
+      type: msg.core.spatial/Pose
+    - name: twist
+      type: msg.core.spatial/Twist
+      optional: true

@@ -197,8 +197,12 @@ void sandbox_denial_diagnostics() {
     require(!r2kernel::sandbox_socket_denial(AF_INET, EPERM), "no diagnosis without the sandbox variable");
     ::setenv(r2kernel::kSandboxNetworkEnv, "brokered", 1);
     const auto inet = r2kernel::sandbox_socket_denial(AF_INET, EPERM);
-    require(inet && inet->rfind("socket(AF_INET) denied by resources.sandbox.network=brokered; ", 0) == 0,
-        "AF_INET denial explanation");
+    // The same alternatives text as the Python SDK's r2kernel.core.sandbox.
+    require(inet == std::string("socket(AF_INET) denied by resources.sandbox.network=brokered; for outbound TCP "
+                                "use the app uplink (open_uplink_tcp), request only sockets authorized by this "
+                                "package's grants, use a declared frontend listener or R2Kernel interfaces, or "
+                                "validate a leader-passed descriptor (R2KERNEL_INHERITED_FDS)"),
+        "AF_INET denial explanation: " + inet.value_or("none"));
     require(r2kernel::sandbox_socket_denial(AF_INET6, EPERM).has_value(), "AF_INET6 denial explanation");
     require(!r2kernel::sandbox_socket_denial(AF_INET, EACCES), "only EPERM is the sandbox denial");
     require(!r2kernel::sandbox_socket_denial(AF_UNIX, EPERM), "AF_UNIX is never sandboxed");

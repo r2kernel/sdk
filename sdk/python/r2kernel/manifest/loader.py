@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
+from r2kernel.contract.dictionary import validate_package_spec_roots
 from r2kernel.contract.loader import ContractSpecError, load_component_spec
 from r2kernel.spec_paths import package_spec_sources
 from .model import (
@@ -25,8 +27,10 @@ from .model import (
 )
 from ._fields import _load_yaml_mapping, _string_mapping, _mapping, _nested_mapping, _string_tuple
 from ._spatial import (
+    ProvidedFramePort,
     _spatial_declaration_status,
     _parse_spatial_declaration,
+    _provided_frame_ports,
     _validate_subsystem_spatial_conformance,
     _validate_deployment_spatial_topology,
 )
@@ -47,19 +51,48 @@ from ._platform import (
 
 def load_subsystem_manifest(path: str | Path, *, package_root: Path | None = None) -> SubsystemManifest:
     manifest_path = Path(path).expanduser().resolve()
+    roots = _subsystem_package_spec_roots(manifest_path, package_root)
+    try:
+        validate_package_spec_roots(roots)
+    except ContractSpecError as exc:
+        raise ManifestError(str(exc)) from exc
+    with _package_spec_scope(roots):
+        return _load_subsystem_manifest(manifest_path)
+
+
+def provided_frame_ports(
+    subsystem: SubsystemManifest, *, package_root: Path | None = None
+) -> dict[str, tuple[ProvidedFramePort, ...]]:
+    """Published topic -> the frames its samples must carry (APIs whose frames.policy is spatial_ports).
+
+    The contracts are read with the same package spec roots as
+    load_subsystem_manifest, which has already refused a mapped port that is
+    missing, an import or a source alias.
+    """
+    with _package_spec_scope(_subsystem_package_spec_roots(subsystem.path, package_root)):
+        return _provided_frame_ports(subsystem)
+
+
+def _subsystem_package_spec_roots(manifest_path: Path, package_root: Path | None) -> tuple[Path, ...]:
+    """The contract spec roots of the package that holds the manifest (package_root, else the nearest package.yaml)."""
     if package_root is None:
         package_root = next((parent for parent in manifest_path.parents
                              if (parent / "package.yaml").is_file()), None)
     if package_root is None:
-        return _load_subsystem_manifest(manifest_path)
+        return ()
     package_root = package_root.resolve()
     if not manifest_path.is_relative_to(package_root):
         raise ManifestError(f"Subsystem manifest must remain inside package directory: {manifest_path}")
-    roots = _package_contract_spec_roots(package_root)
+    return _package_contract_spec_roots(package_root)
+
+
+@contextmanager
+def _package_spec_scope(roots: tuple[Path, ...]):
     if not roots:
-        return _load_subsystem_manifest(manifest_path)
+        yield
+        return
     with package_spec_sources(roots):
-        return _load_subsystem_manifest(manifest_path)
+        yield
 
 
 def _load_subsystem_manifest(manifest_path: Path) -> SubsystemManifest:
@@ -108,6 +141,7 @@ def _load_subsystem_manifest(manifest_path: Path) -> SubsystemManifest:
     )
     _validate_role_endpoint_policy(manifest)
     _validate_subsystem_spatial_conformance(manifest)
+    _provided_frame_ports(manifest)
     return manifest
 
 

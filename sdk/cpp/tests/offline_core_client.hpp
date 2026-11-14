@@ -53,9 +53,10 @@ public:
             request.deadline_ms = deadline_ms;
             return handler(std::move(request));
         }
-        return ControlResponse{timestamp, 0, response};
+        return ControlResponse{timestamp, response_status, response};
     }
     ByteBuffer response;
+    std::uint16_t response_status = 0;
     bool loopback = false;
     ControlHandler handler;
     int listen_port = 41001;

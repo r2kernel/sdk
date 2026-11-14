@@ -45,6 +45,12 @@ from control_shm_support import (
 )
 
 
+@pytest.fixture(autouse=True)
+def development_peer_authority(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The fake Control servers here have no root broker: use the documented development mode."""
+    monkeypatch.setenv("R2KERNEL_RESOURCE_SERVICE_MODE", "disabled")
+
+
 @pytest.fixture
 def portable_test_region_backend(monkeypatch: pytest.MonkeyPatch) -> None:
     """Exercise common mapping logic on macOS without replacing the production backend."""

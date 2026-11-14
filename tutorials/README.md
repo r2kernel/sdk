@@ -21,7 +21,7 @@ The tutorial root is intentionally flat so installed users can start from
 - `lib/`
   - shared Python modules used by the tutorial subsystems and simulator
 - `spec/`
-  - tutorial-private API contracts
+  - package-local tutorial API contracts outside the official dictionary
 - `config/`
   - tutorial fixture configuration
 - `deployments/`

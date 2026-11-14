@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "r2kernel/wrapper/core_client.hpp"
-#include "r2kernel_core.h"
+#include "r2kernel_comm.h"
 
 namespace r2kernel::tutorial {
 

@@ -20,8 +20,9 @@ bool brokered(const char* variable) {
     return value != nullptr && std::strcmp(value, "brokered") == 0;
 }
 constexpr char kAlternatives[] =
-    "; request only sockets authorized by this package's grants, use a declared frontend listener or "
-    "R2Kernel interfaces, or validate a leader-passed descriptor (R2KERNEL_INHERITED_FDS)";
+    "; for outbound TCP use the app uplink (open_uplink_tcp), request only sockets authorized by "
+    "this package's grants, use a declared frontend listener or R2Kernel interfaces, or validate a "
+    "leader-passed descriptor (R2KERNEL_INHERITED_FDS)";
 }  // namespace
 
 std::optional<std::string> sandbox_socket_denial(int family, int error_number) {

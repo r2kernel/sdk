@@ -64,7 +64,7 @@ class BuildSupportInputTests(unittest.TestCase):
         core = self.root / "core"
         (core / "src").mkdir(parents=True)
         (core / "Cargo.toml").write_text(
-            '[package]\nname = "r2kernel_core"\nversion = "0.0.0"\nedition = "2021"\n'
+            '[package]\nname = "r2kernel_comm"\nversion = "0.0.0"\nedition = "2021"\n'
             '[lib]\ncrate-type = ["cdylib"]\n'
         )
         (core / "build.rs").write_text(
@@ -77,6 +77,10 @@ class BuildSupportInputTests(unittest.TestCase):
             '#[no_mangle]\npub extern "C" fn fingerprint_value() -> u32 {\n'
             ' env!("CORE_VALUE").parse().unwrap()\n}\n'
         )
+        # The build uses --locked, which current Cargo refuses without a lock
+        # file; the real core source has its Cargo.lock.
+        subprocess.run(["cargo", "generate-lockfile", "--offline"], cwd=core, check=True,
+                       capture_output=True, text=True)
         for value in ("1", "2"):
             with mock.patch.dict(os.environ, {
                 "CARGO_TARGET_DIR": str(self.root / "cargo"),

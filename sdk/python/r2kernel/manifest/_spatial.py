@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, TYPE_CHECKING
 
-from r2kernel.contract.loader import ContractSpecError, load_component_spec
+from r2kernel.contract.loader import ContractSpecError, load_api_contract_spec, load_component_spec
+from r2kernel.interface import InterfaceSpec, spatial_frame_ports
 from ._fields import _float_tuple
 from .model import (
     ManifestError,
@@ -199,6 +201,80 @@ def _validate_subsystem_spatial_conformance(manifest: SubsystemManifest) -> None
                     f"Subsystem {manifest.name} spatial port {name!r} direction {actual.direction!r} "
                     f"does not match {component.id} direction {expected_port.direction!r}"
                 )
+
+
+@dataclass(frozen=True)
+class ProvidedFramePort:
+    """A field of a published sample that must carry the frame of one of the provider's spatial ports."""
+
+    field: str
+    port: str
+    frame: str
+    contract: str
+
+
+def _provided_frame_ports(manifest: SubsystemManifest) -> dict[str, tuple[ProvidedFramePort, ...]]:
+    """Published topic -> frame checks of the public provided APIs whose frames.policy is spatial_ports.
+
+    Each mapped port must be an export port with a literal frame, so the
+    provider and its consumers read the frame from the provider's own manifest.
+    """
+    checks: dict[str, list[ProvidedFramePort]] = {}
+    for interface_name, declaration in manifest.provides.items():
+        if declaration.visibility != "public":
+            continue
+        for api in _provided_api_contracts(declaration.contract, field_name=f"provides.{interface_name}"):
+            for field_name, port_name in spatial_frame_ports(api).items():
+                check = ProvidedFramePort(
+                    field=field_name,
+                    port=port_name,
+                    frame=_provided_port_frame(manifest, api.id, interface_name, field_name, port_name),
+                    contract=api.id,
+                )
+                for event in api.published_events():
+                    topic_checks = checks.setdefault(event.topic, [])
+                    if check not in topic_checks:
+                        topic_checks.append(check)
+    return {topic: tuple(topic_checks) for topic, topic_checks in checks.items()}
+
+
+def _provided_api_contracts(contract: str, *, field_name: str) -> tuple[InterfaceSpec, ...]:
+    """The API contracts a public contract provides; specs that do not exist are reported elsewhere."""
+    try:
+        if contract.startswith("api."):
+            api_ids: tuple[str, ...] = (contract,)
+        elif contract.startswith("component."):
+            api_ids = load_component_spec(contract).conformance_apis
+        else:
+            return ()
+        apis = []
+        for api_id in api_ids:
+            try:
+                apis.append(load_api_contract_spec(api_id))
+            except ContractSpecError:
+                continue
+        return tuple(apis)
+    except ContractSpecError:
+        return ()
+    except Exception as exc:
+        raise ManifestError(f"Cannot inspect contract {contract!r} for {field_name}: {exc}") from exc
+
+
+def _provided_port_frame(
+    manifest: SubsystemManifest, api_id: str, interface_name: str, field_name: str, port_name: str
+) -> str:
+    subject = (
+        f"Subsystem {manifest.name} provides {api_id} through provides.{interface_name}; "
+        f"its frames.ports.{field_name} names spatial port {port_name!r}"
+    )
+    port = manifest.spatial.ports.get(port_name)
+    if port is None:
+        raise ManifestError(f"{subject}, which the subsystem does not declare")
+    if port.direction != "export":
+        raise ManifestError(f"{subject}, which must be an export port, not {port.direction!r}")
+    if port.frame is None:
+        raise ManifestError(f"{subject}, which must declare a literal frame instead of a source alias")
+    return port.frame
 
 
 def _validate_deployment_spatial_topology(deployment: DeploymentManifest) -> None:

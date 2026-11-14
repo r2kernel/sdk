@@ -113,8 +113,7 @@ bool sequence_has_entries(const YAML::Node& node) {
     return node && node.IsSequence() && node.size() > 0;
 }
 
-ApiContractSpec parse_api_contract_yaml(const std::string& source) {
-    YAML::Node doc = YAML::Load(source);
+ApiContractSpec parse_api_contract_yaml(const YAML::Node& doc) {
     ApiContractSpec spec;
     spec.id = trim(node_to_string(doc["id"]));
 
@@ -184,7 +183,107 @@ ApiContractSpec parse_api_contract_yaml(const std::string& source) {
         }
     }
 
+    if (const YAML::Node frames = doc["frames"]; frames && frames.IsMap()) {
+        spec.frame_policy = node_to_string(frames["policy"]);
+    }
+
     return spec;
+}
+
+bool is_versioned_namespace(std::string_view text) {
+    const auto dot = text.rfind('.');
+    const std::string_view suffix = dot == std::string_view::npos ? text : text.substr(dot + 1);
+    return suffix.size() >= 2 && suffix[0] == 'v'
+        && std::all_of(suffix.begin() + 1, suffix.end(), [](char ch) { return std::isdigit(static_cast<unsigned char>(ch)) != 0; });
+}
+
+// A mapping entry of a document read through const nodes (a missing key is
+// an undefined node; non-const yaml-cpp lookups would insert it).
+YAML::Node mapping_entry(const YAML::Node& mapping, const std::string& key) {
+    if (!mapping || !mapping.IsMap()) return {};
+    return mapping[key];
+}
+
+YAML::Node message_fields(const YAML::Node& document, const std::string& name) {
+    const YAML::Node message = mapping_entry(mapping_entry(document, "messages"), name);
+    if (!message || !message.IsMap()) return {};
+    return message["fields"];
+}
+
+// The fields of a message an API publishes: a local message, or one of a
+// message set resolved through the API's imports and the namespace defaults
+// (Python loader _published_message). An empty node when it is not found.
+YAML::Node published_message_fields(const ApiContractSpec& spec, const YAML::Node& doc, const std::string& type,
+                                    const SchemaContext& context) {
+    const auto slash = type.find('/');
+    std::string namespace_id = slash == std::string::npos ? spec.id : type.substr(0, slash);
+    const std::string name = slash == std::string::npos ? type : type.substr(slash + 1);
+    if (namespace_id == spec.id) return message_fields(doc, name);
+    if (!is_versioned_namespace(namespace_id)) {
+        std::string version = node_to_string(mapping_entry(doc["imports"], namespace_id));
+        if (version.empty()) {
+            if (const auto defaults = context.spec_text("defaults.yaml")) {
+                const YAML::Node document = YAML::Load(*defaults);
+                version = node_to_string(mapping_entry(document["namespaces"], namespace_id));
+            }
+        }
+        if (version.empty()) return {};
+        namespace_id += "." + trim(version);
+    }
+    const auto relative = relative_spec_path("messages", namespace_id);
+    if (relative.empty()) return {};
+    const auto source = context.spec_text(relative.generic_string());
+    if (!source) return {};
+    const YAML::Node message_set = YAML::Load(*source);
+    if (trim(node_to_string(message_set["id"])) != namespace_id) return {};
+    return message_fields(message_set, name);
+}
+
+// Python loader _parse_frames: spatial_ports needs a non-empty frames.ports
+// mapping whose fields are required string fields of every message the API
+// publishes; records each field's wire index per published event.
+void resolve_spatial_ports(ApiContractSpec& spec, const YAML::Node& doc, const SchemaContext& context) {
+    const std::string where = "API contract " + spec.id + ": ";
+    const YAML::Node ports = doc["frames"]["ports"];
+    if (!ports || !ports.IsMap() || ports.size() == 0)
+        throw std::invalid_argument(where + "frames.policy spatial_ports requires a non-empty frames.ports mapping");
+    for (const auto& item : ports) {
+        ApiFramePort port {item.first.IsScalar() ? trim(item.first.Scalar()) : std::string {},
+                           item.second.IsScalar() ? trim(item.second.Scalar()) : std::string {}};
+        if (port.field.empty() || port.port.empty())
+            throw std::invalid_argument(where + "frames.ports must map message field names to spatial port names");
+        spec.frame_ports.push_back(std::move(port));
+    }
+    bool published = false;
+    for (auto& event : spec.events) {
+        if (event.direction != "publish") continue;
+        published = true;
+        const YAML::Node fields = published_message_fields(spec, doc, event.type, context);
+        if (!fields || !fields.IsSequence()) {
+            throw std::invalid_argument(where + "frames.ports cannot be checked: message " + event.type + " of event '"
+                                        + event.topic + "' is not found");
+        }
+        for (const auto& port : spec.frame_ports) {
+            bool found = false;
+            for (std::size_t index = 0; index < fields.size(); ++index) {
+                const YAML::Node field = fields[index];
+                if (trim(node_to_string(field["name"])) != port.field) continue;
+                const std::string field_type = trim(node_to_string(field["type"]));
+                const bool optional = field["optional"] && field["optional"].as<bool>(false);
+                if ((field_type == "string" || field_type == "str") && !optional) {
+                    event.frame_field_indexes.push_back(index);
+                    found = true;
+                }
+                break;
+            }
+            if (!found) {
+                throw std::invalid_argument(where + "frames.ports field '" + port.field
+                                            + "' must be a required string field of " + event.type + " (event '"
+                                            + event.topic + "')");
+            }
+        }
+    }
+    if (!published) throw std::invalid_argument(where + "frames.policy spatial_ports requires a published event");
 }
 
 ComponentContractSpec parse_component_yaml(const std::string& source) {
@@ -236,8 +335,10 @@ std::shared_ptr<const ApiContractSpec> Inventory::api(std::string_view id) const
     if (auto found = impl_->apis.find(key); found != impl_->apis.end()) return found->second;
     const auto source = impl_->context->spec_text(relative_spec_path("apis", id).generic_string());
     if (!source) return {};
-    auto result = std::make_shared<ApiContractSpec>(parse_api_contract_yaml(*source));
+    const YAML::Node document = YAML::Load(*source);
+    auto result = std::make_shared<ApiContractSpec>(parse_api_contract_yaml(document));
     if (result->id != id) throw std::runtime_error("API contract id mismatch: " + key);
+    if (result->frame_policy == kSpatialPortsFramePolicy) resolve_spatial_ports(*result, document, *impl_->context);
     impl_->apis.emplace(key, result); return result;
 }
 std::shared_ptr<const ComponentContractSpec> Inventory::component(std::string_view id) const {

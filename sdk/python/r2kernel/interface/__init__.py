@@ -2,7 +2,13 @@ from __future__ import annotations
 
 from .codec import RustMessageCodec
 from .prepared_codec import PreparedCodec, PreparedSchemaContext, PreparedMessageCodec
-from .loader import InterfaceSpecError, load_interface_spec, load_interface_specs
+from .loader import (
+    SPATIAL_PORTS_FRAME_POLICY,
+    InterfaceSpecError,
+    load_interface_spec,
+    load_interface_specs,
+    spatial_frame_ports,
+)
 from .model import (
     ControlEndpointSpec,
     EventEndpointSpec,
@@ -21,6 +27,7 @@ __all__ = [
     "InterfaceSpecError",
     "InterfaceValidationReport",
     "RustMessageCodec",
+    "SPATIAL_PORTS_FRAME_POLICY",
     "PreparedCodec",
     "PreparedSchemaContext",
     "PreparedMessageCodec",
@@ -31,6 +38,7 @@ __all__ = [
     "ValidationIssue",
     "load_interface_spec",
     "load_interface_specs",
+    "spatial_frame_ports",
     "validate_declared_interfaces",
     "validate_interface_specs",
 ]

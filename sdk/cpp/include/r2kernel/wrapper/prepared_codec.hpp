@@ -5,7 +5,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
-#include "r2kernel_core.h"
+#include "r2kernel_comm.h"
 #include "r2kernel/export.hpp"
 #include "r2kernel/wrapper/core_client.hpp"
 

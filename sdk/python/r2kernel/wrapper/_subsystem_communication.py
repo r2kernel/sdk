@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, Callable
 
 from r2kernel.core._runtime_common import _is_runtime_transport_topic
+from r2kernel.core.event_transport_manager import LOG_ID_EVENT_MESSAGE
 from r2kernel.datatype import DTypeLiteral
 
 
@@ -79,7 +81,30 @@ class _CommunicationMixin:
 
     def publish_event(self, *, topic: str, value, timestamp: int | None = None) -> bool:
         self._ensure_runtime_endpoint_allowed("publishes", topic)
+        if not self._published_frames_match(topic, value):
+            return False
         return self._runtime.publish_event(topic=topic, value=value, timestamp=timestamp)
+
+    def _published_frames_match(self, topic: str, value: Any) -> bool:
+        """Refuse (log frame_mismatch, send nothing) a sample whose frames differ from the provider's ports.
+
+        Applies to Events of provided APIs whose frames.policy is spatial_ports.
+        A missing field is left to the codec, which refuses it on encode.
+        """
+        checks = self._published_frame_ports.get(topic)
+        if not checks or not isinstance(value, Mapping):
+            return True
+        for check in checks:
+            actual = value.get(check.field)
+            if actual is None or actual == check.frame:
+                continue
+            self.logger.error(
+                LOG_ID_EVENT_MESSAGE,
+                f"frame_mismatch: {topic}.{check.field} is {actual!r}, but spatial port {check.port!r} "
+                f"has frame {check.frame!r} ({check.contract}); the sample was not published",
+            )
+            return False
+        return True
 
     def start_event_transport(self) -> None:
         self._runtime.start_event_transport()

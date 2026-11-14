@@ -1,7 +1,8 @@
 # Subsystem, robot and application manifest validation cases shared by the
 # Python and C++ SDKs (deployment-validation.yaml holds the deployment cases).
 # Read by sdk/python/tests/test_sdk_parity_cases.py and
-# sdk/cpp/tests/sdk_parity_cases_test.cpp.
+# sdk/cpp/tests/sdk_parity_cases_test.cpp; the backend package validation runs
+# the cases that state the core's decision (`core`).
 #
 # Each case writes `files` (relative path -> text) into an empty directory and
 # loads `path` with the loader named by `load` (subsystem, robot, application
@@ -478,6 +479,527 @@ cases:
         provides:
           gripper: {contract: component.gripper.v1}
 
+  # frames.policy spatial_ports (api.locomotion.odometry.v2) -----------------
+  - name: spatial_ports_missing_port
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Subsystem component.mobile provides api.locomotion.odometry.v2 through provides.odometry; its frames.ports.frame_id names spatial port 'reference', which the subsystem does not declare"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+        spatial:
+          participation: required
+          ports:
+            body: {direction: export, semantic: mobile_body, frame: base_link}
+        provides:
+          odometry: {contract: api.locomotion.odometry.v2}
+  - name: spatial_ports_import_port
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Subsystem component.mobile provides api.locomotion.odometry.v2 through provides.odometry; its frames.ports.frame_id names spatial port 'reference', which must be an export port, not 'import'"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+        spatial:
+          participation: required
+          ports:
+            reference: {direction: import, semantic: odometry_reference, frame: odom}
+            body: {direction: export, semantic: mobile_body, frame: base_link}
+        provides:
+          odometry: {contract: api.locomotion.odometry.v2}
+  - name: spatial_ports_source_alias
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Subsystem component.mobile provides api.locomotion.odometry.v2 through provides.odometry; its frames.ports.child_frame_id names spatial port 'body', which must declare a literal frame instead of a source alias"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+        spatial:
+          participation: required
+          ports:
+            reference: {direction: export, semantic: odometry_reference, frame: odom}
+            body:
+              direction: export
+              semantic: mobile_body
+              source: {requirement: base, port: body}
+        requires:
+          base: {contract: component.mobile_base.v1}
+        provides:
+          odometry: {contract: api.locomotion.odometry.v2}
+  - name: spatial_ports_component_source_alias
+    load: subsystem
+    path: subsystem.yaml
+    expect: reject
+    error: "Subsystem component.mobile provides api.locomotion.odometry.v2 through provides.mobile_base; its frames.ports.frame_id names spatial port 'reference', which must declare a literal frame instead of a source alias"
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+        spatial:
+          participation: required
+          ports:
+            reference:
+              direction: export
+              semantic: odometry_reference
+              source: {requirement: base, port: reference}
+            body: {direction: export, semantic: mobile_body, frame: base_link}
+        requires:
+          base: {contract: component.mobile_base.v1}
+        provides:
+          mobile_base: {contract: component.mobile_base.odometry.v2}
+  - name: spatial_ports_component
+    load: subsystem
+    path: subsystem.yaml
+    expect: accept
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+        spatial:
+          participation: required
+          ports:
+            reference: {direction: export, semantic: odometry_reference, frame: odom}
+            body: {direction: export, semantic: mobile_body, frame: base_link}
+        provides:
+          mobile_base: {contract: component.mobile_base.odometry.v2}
+  - name: endpoint_declared_frames_need_no_ports
+    load: subsystem
+    path: subsystem.yaml
+    expect: accept
+    files:
+      subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+        provides:
+          odometry: {contract: api.locomotion.odometry.v1}
+
+  # Package spec roots and the IDs reserved for the standard dictionary --------
+  - name: package_spec_root_differing_standard
+    load: subsystem
+    path: package/subsystem.yaml
+    expect: reject
+    error: "api.locomotion.odometry.v1 differs from the installed standard definition; a package spec root may contain a standard ID only as an identical copy"
+    files:
+      package/package.yaml: |
+        schema_version: 1
+        name: demo.mobile
+        entrypoint: {command: bin/run}
+        contracts: {spec_roots: [spec]}
+      package/subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+      package/spec/apis/api/locomotion/odometry/v1.yaml: |
+        version: 1
+        id: api.locomotion.odometry.v1
+        kind: api_contract
+        description: A package copy that differs from the standard definition.
+  - name: package_spec_root_standard_prefix
+    load: subsystem
+    path: package/subsystem.yaml
+    expect: reject
+    error: "api.locomotion.odometry.v3 uses the standard prefix api.locomotion; use a vendor segment such as api.<vendor>.*"
+    files:
+      package/package.yaml: |
+        schema_version: 1
+        name: demo.mobile
+        entrypoint: {command: bin/run}
+        contracts: {spec_roots: [spec]}
+      package/subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+      package/spec/apis/api/locomotion/odometry/v3.yaml: |
+        version: 1
+        id: api.locomotion.odometry.v3
+        kind: api_contract
+  - name: package_spec_root_vendor_segment
+    load: subsystem
+    path: package/subsystem.yaml
+    expect: accept
+    files:
+      package/package.yaml: |
+        schema_version: 1
+        name: demo.mobile
+        entrypoint: {command: bin/run}
+        contracts: {spec_roots: [spec]}
+      package/subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+      package/spec/apis/api/acme/odometry/v1.yaml: |
+        version: 1
+        id: api.acme.odometry.v1
+        kind: api_contract
+
+  # A message or API document must declare the id of its path and sit at the
+  # path its id names, as the core requires at codec setup
+  # (schema_snapshot::validate_source_id). `core` is the core's own decision on
+  # the package spec root; the backend tests check it (contract_dictionary_tests.rs).
+  - name: package_spec_root_document_at_its_id_path
+    load: subsystem
+    path: package/subsystem.yaml
+    expect: accept
+    core: accept
+    files:
+      package/package.yaml: |
+        schema_version: 1
+        name: demo.mobile
+        entrypoint: {command: bin/run}
+        contracts: {spec_roots: [spec]}
+      package/subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+      package/spec/apis/api/acme/foo/bar/v1.yaml: |
+        version: 1
+        id: api.acme.foo.bar.v1
+        kind: api_contract
+        events: []
+      package/spec/messages/msg/acme/pose/v1.yaml: |
+        version: 1
+        id: msg.acme.pose.v1
+        kind: message_set
+        description: Test.
+        messages:
+          Pose:
+            description: Test.
+            fields:
+              - name: ok
+                type: bool
+  - name: package_spec_root_document_id_differs
+    load: subsystem
+    path: package/subsystem.yaml
+    expect: reject
+    error: "apis/api/acme/pose/v1.yaml declares id api.acme.other.v1; a document at this path must declare api.acme.pose.v1"
+    core: reject
+    files:
+      package/package.yaml: |
+        schema_version: 1
+        name: demo.mobile
+        entrypoint: {command: bin/run}
+        contracts: {spec_roots: [spec]}
+      package/subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+      package/spec/apis/api/acme/pose/v1.yaml: |
+        version: 1
+        id: api.acme.other.v1
+        kind: api_contract
+        events: []
+  - name: package_spec_root_document_id_empty_segment
+    load: subsystem
+    path: package/subsystem.yaml
+    expect: reject
+    error: "apis/api/acme/pose/v1.yaml declares id api.acme..pose.v1; a document at this path must declare api.acme.pose.v1"
+    core: reject
+    files:
+      package/package.yaml: |
+        schema_version: 1
+        name: demo.mobile
+        entrypoint: {command: bin/run}
+        contracts: {spec_roots: [spec]}
+      package/subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+      package/spec/apis/api/acme/pose/v1.yaml: |
+        version: 1
+        id: api.acme..pose.v1
+        kind: api_contract
+        events: []
+  - name: package_spec_root_document_without_id
+    load: subsystem
+    path: package/subsystem.yaml
+    expect: reject
+    error: "messages/msg/acme/pose/v1.yaml has no id"
+    core: reject
+    files:
+      package/package.yaml: |
+        schema_version: 1
+        name: demo.mobile
+        entrypoint: {command: bin/run}
+        contracts: {spec_roots: [spec]}
+      package/subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+      package/spec/messages/msg/acme/pose/v1.yaml: |
+        version: 1
+        kind: message_set
+        messages: {}
+  - name: package_spec_root_document_not_yaml
+    load: subsystem
+    path: package/subsystem.yaml
+    expect: reject
+    error: "apis/api/acme/pose/v1.yaml is not a valid YAML document"
+    core: reject
+    files:
+      package/package.yaml: |
+        schema_version: 1
+        name: demo.mobile
+        entrypoint: {command: bin/run}
+        contracts: {spec_roots: [spec]}
+      package/subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+      package/spec/apis/api/acme/pose/v1.yaml: |
+        id: [unclosed
+  - name: package_spec_root_dotted_directory
+    load: subsystem
+    path: package/subsystem.yaml
+    expect: reject
+    error: "apis/api/acme/foo.bar/v1.yaml is not at the path of id api.acme.foo.bar.v1; a document with this id must be at apis/api/acme/foo/bar/v1.yaml"
+    core: reject
+    files:
+      package/package.yaml: |
+        schema_version: 1
+        name: demo.mobile
+        entrypoint: {command: bin/run}
+        contracts: {spec_roots: [spec]}
+      package/subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+      package/spec/apis/api/acme/foo.bar/v1.yaml: |
+        version: 1
+        id: api.acme.foo.bar.v1
+        kind: api_contract
+        events: []
+  - name: package_spec_root_dotted_directory_other_id
+    load: subsystem
+    path: package/subsystem.yaml
+    expect: reject
+    error: "apis/api/acme/foo.bar/v1.yaml declares id api.acme.foo/bar.v1; a document at this path must declare api.acme.foo.bar.v1"
+    core: reject
+    files:
+      package/package.yaml: |
+        schema_version: 1
+        name: demo.mobile
+        entrypoint: {command: bin/run}
+        contracts: {spec_roots: [spec]}
+      package/subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+      package/spec/apis/api/acme/foo.bar/v1.yaml: |
+        version: 1
+        id: api.acme.foo/bar.v1
+        kind: api_contract
+        events: []
+  - name: package_spec_root_dotted_file_name
+    load: subsystem
+    path: package/subsystem.yaml
+    expect: reject
+    error: "messages/msg/acme/pose/v1.2.yaml is not at the path of id msg.acme.pose.v1.2; a document with this id must be at messages/msg/acme/pose/v1/2.yaml"
+    core: reject
+    files:
+      package/package.yaml: |
+        schema_version: 1
+        name: demo.mobile
+        entrypoint: {command: bin/run}
+        contracts: {spec_roots: [spec]}
+      package/subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+      package/spec/messages/msg/acme/pose/v1.2.yaml: |
+        version: 1
+        id: msg.acme.pose.v1.2
+        kind: message_set
+        description: Test.
+        messages:
+          Pose:
+            description: Test.
+            fields:
+              - name: ok
+                type: bool
+
+  # The core's own schema context decides last: the SDK guards and package
+  # validation refuse what it refuses at codec setup, beyond the checks that
+  # name a path (cross-audit CONTROL-112-03). Unknown message types are
+  # resolved when a codec is prepared, not here.
+  - name: package_spec_root_defaults_valid
+    load: subsystem
+    path: package/subsystem.yaml
+    expect: accept
+    core: accept
+    files:
+      package/package.yaml: |
+        schema_version: 1
+        name: demo.mobile
+        entrypoint: {command: bin/run}
+        contracts: {spec_roots: [spec]}
+      package/subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+      package/spec/defaults.yaml: |
+        version: 1
+        kind: namespace_defaults
+        namespaces: {}
+  - name: package_spec_root_defaults_bad_version
+    load: subsystem
+    path: package/subsystem.yaml
+    expect: reject
+    error: "the runtime core refuses this spec root when it prepares the codecs"
+    core: reject
+    files:
+      package/package.yaml: |
+        schema_version: 1
+        name: demo.mobile
+        entrypoint: {command: bin/run}
+        contracts: {spec_roots: [spec]}
+      package/subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+      package/spec/defaults.yaml: |
+        version: 2
+        kind: namespace_defaults
+        namespaces: {}
+  - name: package_spec_root_defaults_without_namespaces
+    load: subsystem
+    path: package/subsystem.yaml
+    expect: reject
+    error: "the runtime core refuses this spec root when it prepares the codecs"
+    core: reject
+    files:
+      package/package.yaml: |
+        schema_version: 1
+        name: demo.mobile
+        entrypoint: {command: bin/run}
+        contracts: {spec_roots: [spec]}
+      package/subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+      package/spec/defaults.yaml: |
+        version: 1
+        kind: namespace_defaults
+  - name: package_spec_root_message_set_without_messages
+    load: subsystem
+    path: package/subsystem.yaml
+    expect: reject
+    error: "the runtime core refuses this spec root when it prepares the codecs"
+    core: reject
+    files:
+      package/package.yaml: |
+        schema_version: 1
+        name: demo.mobile
+        entrypoint: {command: bin/run}
+        contracts: {spec_roots: [spec]}
+      package/subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+      package/spec/messages/msg/acme/pose/v1.yaml: |
+        version: 1
+        id: msg.acme.pose.v1
+        kind: message_set
+  - name: package_spec_root_message_set_with_another_kind
+    load: subsystem
+    path: package/subsystem.yaml
+    expect: reject
+    error: "the runtime core refuses this spec root when it prepares the codecs"
+    core: reject
+    files:
+      package/package.yaml: |
+        schema_version: 1
+        name: demo.mobile
+        entrypoint: {command: bin/run}
+        contracts: {spec_roots: [spec]}
+      package/subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+      package/spec/messages/msg/acme/pose/v1.yaml: |
+        version: 1
+        id: msg.acme.pose.v1
+        kind: api_contract
+        messages: {}
+  - name: package_spec_root_message_fields_as_mapping
+    load: subsystem
+    path: package/subsystem.yaml
+    expect: reject
+    error: "the runtime core refuses this spec root when it prepares the codecs"
+    core: reject
+    files:
+      package/package.yaml: |
+        schema_version: 1
+        name: demo.mobile
+        entrypoint: {command: bin/run}
+        contracts: {spec_roots: [spec]}
+      package/subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+      package/spec/messages/msg/acme/pose/v1.yaml: |
+        version: 1
+        id: msg.acme.pose.v1
+        kind: message_set
+        messages:
+          Pose:
+            fields: {a: u8}
+  - name: package_spec_root_api_controls_as_mapping
+    load: subsystem
+    path: package/subsystem.yaml
+    expect: reject
+    error: "the runtime core refuses this spec root when it prepares the codecs"
+    core: reject
+    files:
+      package/package.yaml: |
+        schema_version: 1
+        name: demo.mobile
+        entrypoint: {command: bin/run}
+        contracts: {spec_roots: [spec]}
+      package/subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+      package/spec/apis/api/acme/pose/v1.yaml: |
+        version: 1
+        id: api.acme.pose.v1
+        kind: api_contract
+        events: []
+        controls: {}
+  - name: package_spec_root_message_type_resolved_at_prepare
+    load: subsystem
+    path: package/subsystem.yaml
+    expect: accept
+    core: accept
+    files:
+      package/package.yaml: |
+        schema_version: 1
+        name: demo.mobile
+        entrypoint: {command: bin/run}
+        contracts: {spec_roots: [spec]}
+      package/subsystem.yaml: |
+        kind: r2kernel.subsystem
+        version: 1
+        subsystem: {name: component.mobile, role: component}
+      package/spec/messages/msg/acme/pose/v1.yaml: |
+        version: 1
+        id: msg.acme.pose.v1
+        kind: message_set
+        messages:
+          Pose:
+            fields:
+              - {name: a, type: Unknown}
   # Robot and application manifests ------------------------------------------
   - name: robot_top_level_capabilities
     load: robot

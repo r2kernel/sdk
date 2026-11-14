@@ -35,6 +35,15 @@ namespace r2kernel::wrapper {
 
 namespace detail {
 class SubsystemConfig;
+// A field of a published sample that must carry the frame of one of the
+// provider's spatial ports (an API whose frames.policy is spatial_ports).
+struct PublishedFrameCheck {
+    std::string field;
+    std::size_t field_index = 0;  // wire index of the field in the message
+    std::string port;
+    std::string frame;
+    std::string contract;
+};
 }  // namespace detail
 
 enum class ClockSource : std::uint8_t {
@@ -362,7 +371,11 @@ public:
 
     bool register_event_publish(const EventPublishSpec& spec);
     bool register_event_subscribe(const EventSubscribeSpec& spec);
-    // Publishes with the registered publication's priority.
+    // Publishes with the registered publication's priority. For an Event of a
+    // provided API whose frames.policy is spatial_ports, a sample whose mapped
+    // frame field differs from the provider's spatial port frame is refused:
+    // the error is logged as frame_mismatch, nothing is sent, and the call
+    // returns false.
     bool publish_event(const std::string& topic,
                        const EventPayload& payload,
                        std::int64_t timestamp_ns = -1);
@@ -936,6 +949,8 @@ private:
     mutable std::mutex spatial_mutex_;
     std::map<std::string, FrameTransform> spatial_transforms_;
     std::unordered_set<std::string> allowed_event_publish_topics_;
+    // Published topic -> frame checks of the provided spatial_ports APIs.
+    std::unordered_map<std::string, std::vector<detail::PublishedFrameCheck>> published_frame_checks_;
     std::unordered_set<std::string> allowed_event_subscribe_topics_;
     std::unordered_set<std::string> allowed_control_topics_;
     std::unordered_set<std::string> provided_control_topics_;

@@ -2,11 +2,34 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
 import sys
 from pathlib import Path
 from typing import Any
 
-_ROOT = next(parent for parent in Path(__file__).resolve().parents if (parent / "subsystems").is_dir() and (parent / "simulator").is_dir())
+
+def _tutorial_root() -> Path:
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "subsystems").is_dir() and (parent / "simulator").is_dir():
+            return parent
+    candidates = [
+        os.environ.get("R2KERNEL_TUTORIAL_ROOT"),
+        str(Path(os.environ.get("R2KERNEL_HOME", "/opt/r2kernel")) / "tutorials"),
+        "/opt/r2kernel/tutorials",
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        root = Path(candidate)
+        if (root / "subsystems").is_dir() and (root / "simulator").is_dir():
+            return root
+    raise RuntimeError(
+        "could not locate R2Kernel tutorial runtime; set R2KERNEL_TUTORIAL_ROOT or install tutorials under /opt/r2kernel/tutorials"
+    )
+
+
+_ROOT = _tutorial_root()
 _SUPPORT_PY = _ROOT / "support" / "python"
 _LIB = _ROOT / "lib"
 for _path in (_SUPPORT_PY, _LIB):
@@ -77,6 +100,11 @@ class MobileControllerSubsystem(ComponentSubsystem):
         self._spatial_x = 0.0
         self._spatial_y = 0.0
         self._spatial_heading = 0.0
+        # api.locomotion.odometry.v2 samples carry the frames of the reference
+        # and body ports; the SDK refuses a sample that names other frames.
+        ports = self.subsystem_manifest.spatial.ports
+        self._odometry_frame_id = ports["reference"].frame
+        self._odometry_child_frame_id = ports["body"].frame
 
     def on_initialize(self) -> bool:
         self.register_event_publish(topic="mobile_base_state", type=MOBILE_BASE_STATE, size=WORLD_EVENT_SIZE, priority=5, queue_depth=4)
@@ -490,8 +518,8 @@ class MobileControllerSubsystem(ComponentSubsystem):
         self.publish_event(
             topic="odometry",
             value={
-                "frame_id": "odom",
-                "child_frame_id": "cleaner_base",
+                "frame_id": self._odometry_frame_id,
+                "child_frame_id": self._odometry_child_frame_id,
                 "pose": pose(x=self._spatial_x, y=self._spatial_y, yaw=self._spatial_heading),
                 "twist": twist(
                     linear_x=float(command.get("vx", 0.0)) * 0.36,

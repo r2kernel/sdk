@@ -125,8 +125,12 @@ def source_sample(*, sample_id: int = 1, acquired_at_clock_ns: int = 1_015) -> d
     }
 
 
-def localizer_odometry(*, x: float = 1.0, y: float = 2.0, z: float = 0.0, yaw: float = math.pi / 2) -> dict[str, object]:
+def localizer_odometry(
+    *, x: float = 1.0, y: float = 2.0, z: float = 0.0, yaw: float = math.pi / 2, child_frame_id: str = "cleaner_base"
+) -> dict[str, object]:
     return {
+        "frame_id": "odom",
+        "child_frame_id": child_frame_id,
         "pose": {
             "position": {"x": x, "y": y, "z": z},
             "orientation": {
@@ -714,6 +718,47 @@ class GnssAdapterIntegrationTests(unittest.TestCase):
         expected_height = position_fix["pose"]["position"]["z"] + 0.1  # type: ignore[index]
         self.assertAlmostEqual(estimates[-1]["pose"]["position"]["z"], expected_height, places=12)
         self.assertEqual(component._map_odom, first_map_odom)
+
+    def test_localizer_takes_the_body_frame_from_the_odometry_sample(self) -> None:
+        tracker = GnssSampleTracker(expected_frame_id=self.mount.frame_id)
+        tracker.apply_response(
+            tracker_response(sequence=1, fix=gnss_fix()),
+            expected_cycle=cycle(),
+            now_sync_ns=100,
+            maximum_measurement_age_ns=self.fixture.maximum_measurement_age_ns,
+            future_timestamp_tolerance_ns=self.fixture.future_timestamp_tolerance_ns,
+        )
+        component = LocalizerSubsystem.__new__(LocalizerSubsystem)
+        component._fixture = self.fixture
+        component._mount = self.mount
+        component._lock = threading.RLock()
+        component._tracker = tracker
+        component._odometry = localizer_odometry(child_frame_id="base_footprint")
+        component._aligned_sample_identity = None
+        component.publish_event = Mock()
+        component.set_frame_transform = Mock()
+        component.now_ns = Mock(return_value=110)
+        component._logger = Mock()
+
+        component._align_latest_measurement_locked()
+
+        # api.locomotion.odometry.v2: the provider's body frame, never a local default.
+        self.assertEqual(component._position_fix["child_frame_id"], "base_footprint")  # type: ignore[index]
+
+    def test_localizer_drops_odometry_that_does_not_name_its_frames(self) -> None:
+        for field_name in ("frame_id", "child_frame_id"):
+            with self.subTest(field_name):
+                component = LocalizerSubsystem.__new__(LocalizerSubsystem)
+                component._lock = threading.RLock()
+                component._odometry = None
+                component._logger = Mock()
+                sample = localizer_odometry()
+                del sample[field_name]
+
+                component._on_odometry(sample, 100)
+
+                self.assertIsNone(component._odometry)
+                self.assertIn(field_name, component.logger.warning.call_args.args[1])
 
     def test_localizer_poller_requests_typed_latest_sample_exchange(self) -> None:
         component = LocalizerSubsystem.__new__(LocalizerSubsystem)

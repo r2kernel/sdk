@@ -74,9 +74,10 @@ class SandboxDenialTests(unittest.TestCase):
                 patch.object(sandbox.socket, "socket", _seccomp_like(socket.AF_INET, socket.AF_INET6)):
             (message,) = sandbox.sandbox_socket_denials()
             self.assertEqual(message, (
-                "socket(AF_INET/AF_INET6) denied by resources.sandbox.network=brokered; request only sockets "
-                "authorized by this package's grants, use a declared frontend listener or R2Kernel interfaces, "
-                "or validate a leader-passed descriptor (R2KERNEL_INHERITED_FDS)"))
+                "socket(AF_INET/AF_INET6) denied by resources.sandbox.network=brokered; for outbound TCP use "
+                "the app uplink (open_uplink_tcp), request only sockets authorized by this package's grants, "
+                "use a declared frontend listener or R2Kernel interfaces, or validate a leader-passed "
+                "descriptor (R2KERNEL_INHERITED_FDS)"))
             wrapped = RuntimeError("readiness failed")
             wrapped.__cause__ = _caught(_socket_eperm)
             self.assertEqual(sandbox.explain_permission_error(wrapped), message)

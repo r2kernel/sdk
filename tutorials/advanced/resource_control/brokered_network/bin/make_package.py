@@ -19,7 +19,7 @@ def main() -> int:
     parser.add_argument("--target-host")
     parser.add_argument("--target-port", type=int, default=0)
     parser.add_argument("--result-file")
-    parser.add_argument("--repo-root", help="Checkout containing sdk/python (default: the checkout containing this tutorial).")
+    parser.add_argument("--repo-root", help="Checkout or installation prefix containing sdk/python (default: the one containing this tutorial).")
     args = parser.parse_args()
 
     sdk_python = sdk_python_dir(__file__, args.repo_root)

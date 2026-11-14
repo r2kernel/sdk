@@ -8,7 +8,8 @@ NIC names differ across targets. Use `make_packages.py` to create temporary
 managed gateway packages for the current host. The UDP sender packages
 explicitly select `resources.sandbox.network: advisory` because these probes
 exercise direct Linux socket binding and routing. This exception is available
-only to gateways and permits general direct networking:
+only to gateways, permits general direct networking, and needs a root approval
+of each generated package with `r2kernel-resourced --grant-advisory-network`:
 
 ```bash
 python3 tutorials/advanced/resource_control/physical_io/bin/make_packages.py \

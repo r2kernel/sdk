@@ -4,7 +4,7 @@
 // subsystem-owned control requests). Not exported (hidden by default).
 
 #include "r2kernel/wrapper/core_client.hpp"
-#include "r2kernel_core.h"
+#include "r2kernel_comm.h"
 
 #include <chrono>
 #include <cstddef>

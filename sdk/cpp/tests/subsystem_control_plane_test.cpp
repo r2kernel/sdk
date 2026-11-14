@@ -6,7 +6,7 @@
 #include "../src/wrapper/contract_loader.hpp"
 #include "fake_control_socket.hpp"
 #include "offline_core_client.hpp"
-#include "r2kernel_core.h"
+#include "r2kernel_comm.h"
 
 #include <yaml-cpp/yaml.h>
 
@@ -550,6 +550,27 @@ void typed_procedure_error_reaches_public_consumer() {
     require(subsystem.calls == kFixtureCalls + 7, "stop admitted a new Procedure handler");
     subsystem.terminate();
 }
+
+// A failure status of the Control channel has no Procedure response object; the
+// untyped call reports it with the documented code, as the typed calls do
+// (cross-audit SDK-112-02).
+void untyped_procedure_transport_failure_is_reported() {
+    LogRecord log;
+    auto client = std::make_shared<r2kernel_test::OfflineCoreClient>();
+    Plain subsystem(plain_options("fixture.untyped_procedure", log, client));
+    subsystem.initialize();
+    const std::string reason = "control route closed";
+    client->response.assign(reason.begin(), reason.end());
+    client->response_status = 3;
+    auto reply = subsystem.call_procedure("peer", "echo", "{\"value\":7}", 250);
+    require(reply && !reply->ok && reply->error_code == "procedure_transport_failed" && reply->error_message == reason,
+        "an untyped Procedure transport failure was not reported as procedure_transport_failed");
+    client->response_status = 0;
+    const std::string body = "{\"ok\":true,\"request_id\":\"r1\",\"result\":{\"value\":7}}";
+    client->response.assign(body.begin(), body.end());
+    reply = subsystem.call_procedure("peer", "echo", "{\"value\":7}", 250);
+    require(reply && reply->ok && reply->result_json == "{\"value\":7}", "an untyped Procedure success was not decoded");
+}
 }  // namespace
 
 int main() {
@@ -565,6 +586,7 @@ int main() {
         late_policy_rule();
         dispatch_server_starts_without_an_explicit_bind();
         typed_procedure_error_reaches_public_consumer();
+        untyped_procedure_transport_failure_is_reported();
         std::cout << "subsystem control-plane checks passed\n";
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n';

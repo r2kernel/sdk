@@ -7,7 +7,10 @@
 // replayed: a failed receive cannot establish whether the broker already
 // performed it. Linux only; elsewhere every request throws std::runtime_error.
 
+#include <chrono>
+#include <cstdint>
 #include <optional>
+#include <stdexcept>
 #include <string>
 
 #include "r2kernel/core/inherited_fds.hpp"
@@ -19,6 +22,20 @@ namespace r2kernel::core {
 constexpr char kResourceLeaseIdEnv[] = "R2KERNEL_RESOURCE_LEASE_ID";
 constexpr char kResourceServiceSocketEnv[] = "R2KERNEL_RESOURCE_SERVICE_SOCKET";
 constexpr char kDefaultResourceSocket[] = "/run/r2kernel/resourced.sock";
+
+// The broker refused a request. what() is the broker's error text verbatim
+// and code() its stable error_code (empty when the reply has none), for
+// example "destination_blocked" from open_uplink_tcp. Decide on code(), never
+// on the text.
+class R2KERNEL_CPP_API ResourceBrokerError : public std::runtime_error {
+public:
+    ResourceBrokerError(std::string code, const std::string& message);
+    ~ResourceBrokerError() override;
+    const std::string& code() const noexcept { return code_; }
+
+private:
+    std::string code_;
+};
 
 // A brokered socket. The descriptor is close-on-exec; ownership passes to the
 // caller (close() or ::close). metadata_json is the broker's result object as
@@ -79,6 +96,17 @@ struct DeviceOpenOptions {
     bool nonblocking = true;
 };
 
+// Arguments of Python's ResourceBrokerClient.open_uplink_tcp; TLS is left to
+// the caller's library. host is a DNS name or an IP literal without brackets
+// (1 to 253 bytes); timeout bounds the broker's resolve and connect (1 ms to
+// 120 s; the broker shortens it to the host's max_connect_timeout_ms, 30 s by
+// default).
+struct UplinkTcpOptions {
+    std::string host;
+    std::uint16_t port = 0;
+    std::chrono::milliseconds timeout{10000};
+};
+
 class R2KERNEL_CPP_API ResourceBrokerClient {
 public:
     // An empty lease_id reads R2KERNEL_RESOURCE_LEASE_ID; an empty socket_path
@@ -89,15 +117,23 @@ public:
     const std::string& lease_id() const noexcept { return lease_id_; }
     const std::string& socket_path() const noexcept { return socket_path_; }
 
-    // Each request has an absolute 5 s budget (connect, send, every receive).
-    // Broker refusals, malformed or oversized (> 1 MiB) responses, invalid or
-    // truncated ancillary data and a missing descriptor throw
+    // Each request has an absolute 5 s budget (connect, send, every receive),
+    // except open_uplink_tcp. A broker refusal throws ResourceBrokerError (a
+    // std::runtime_error). Malformed or oversized (> 1 MiB) responses, invalid
+    // or truncated ancillary data and a missing descriptor throw
     // std::runtime_error; every descriptor received with a rejected response
     // is closed.
     BrokeredSocketResult open_udp_socket(const UdpSocketOptions& options) const;
-    // Connected, revocable AF_UNIX stream to one root-approved endpoint.
-    // Validates the broker execution_id and never exposes an Internet FD.
-    BrokeredSocketResult open_approved_tcp_stream(const std::string& grant_id) const;
+    // Outbound TCP connection through the host's app uplink (managed role: app
+    // packages). The broker resolves the host, applies the host's uplink policy
+    // and connects within options.timeout; the reply is awaited for
+    // options.timeout + 2 s. The result is a connected AF_UNIX stream that the
+    // broker relays to the TCP connection; metadata_json has kind uplink_tcp,
+    // connection_id, lease_id, the normalized host, port, remote_address and
+    // interface. Invalid options throw std::invalid_argument before any request;
+    // a reply whose metadata or descriptor fails the checks throws
+    // std::runtime_error and closes the descriptor.
+    BrokeredSocketResult open_uplink_tcp(const UplinkTcpOptions& options) const;
     BrokeredSocketResult open_tcp_socket(const TcpSocketOptions& options) const;
     // Returns an AF_UNIX stream listener for a broker-owned loopback TCP relay.
     // metadata_json keeps bind_host/bind_port of that TCP endpoint. Validate the

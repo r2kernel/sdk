@@ -148,8 +148,8 @@ public:
     // ResourceBrokerClient from the environment (R2KERNEL_RESOURCE_LEASE_ID,
     // R2KERNEL_RESOURCE_SERVICE_SOCKET) and makes one broker request.
     BrokeredSocketResult open_udp_socket(const UdpSocketOptions& options) const;
-    // Revocable AF_UNIX byte stream to one root-approved endpoint.
-    BrokeredSocketResult open_approved_tcp_stream(const std::string& grant_id) const;
+    // Outbound TCP connection through the host's app uplink (AF_UNIX relay).
+    BrokeredSocketResult open_uplink_tcp(const UplinkTcpOptions& options) const;
     BrokeredSocketResult open_tcp_socket(const TcpSocketOptions& options) const;
     BrokeredSocketResult open_frontend_tcp_listener(const FrontendTcpListenerOptions& options = {}) const;
     BrokeredSocketResult open_can_socket(const CanSocketOptions& options) const;

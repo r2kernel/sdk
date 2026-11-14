@@ -37,6 +37,9 @@ SPEC_DOCUMENT_VERSION = 1
 MESSAGE_SET_KIND = "message_set"
 NAMESPACE_DEFAULTS_KIND = "namespace_defaults"
 _LEGACY_HEADER_KEYS = ("schema_version", "namespace")
+# frames.policy whose frames.ports binds published message fields to provider spatial ports.
+SPATIAL_PORTS_FRAME_POLICY = "spatial_ports"
+_STRING_TYPES = ("string", "str")
 
 
 def _load_default_namespace_versions() -> dict[str, str]:
@@ -187,6 +190,13 @@ def _parse_interface_spec(document: dict[str, Any], *, source: str) -> Interface
         procedures=normalized_procedures,
         operations=normalized_operations,
     )
+    frames = _parse_frames(
+        document.get("frames"),
+        spec_id=spec_id,
+        events=normalized_events,
+        messages=normalized_messages,
+        source=source,
+    )
 
     return InterfaceSpec(
         id=spec_id,
@@ -195,7 +205,7 @@ def _parse_interface_spec(document: dict[str, Any], *, source: str) -> Interface
         description=description,
         kind=kind,
         imports=imports,
-        frames=_parse_metadata_mapping(document.get("frames"), key="frames", source=source),
+        frames=frames,
         timing=_parse_metadata_mapping(document.get("timing"), key="timing", source=source),
         state_model=_parse_metadata_mapping(document.get("state_model"), key="state_model", source=source),
         failure_semantics=_parse_metadata_mapping(
@@ -241,6 +251,80 @@ def _parse_metadata_mapping(raw: Any, *, key: str, source: str) -> dict[str, Any
     if not isinstance(raw, dict):
         raise InterfaceSpecError(f"{key} must be a mapping in {source}")
     return dict(raw)
+
+
+def spatial_frame_ports(spec: InterfaceSpec) -> dict[str, str]:
+    """Message field -> provider spatial port of a ``spatial_ports`` API; empty for any other policy.
+
+    Every sample of an Event the API publishes carries, in each mapped field,
+    exactly the frame of that spatial port of its provider.
+    """
+    if spec.frames.get("policy") != SPATIAL_PORTS_FRAME_POLICY:
+        return {}
+    return dict(spec.frames["ports"])
+
+
+def _parse_frames(
+    raw: Any,
+    *,
+    spec_id: str,
+    events: tuple[EventEndpointSpec, ...],
+    messages: dict[str, MessageSpec],
+    source: str,
+) -> dict[str, Any]:
+    """Other frame policies remain metadata; ``spatial_ports`` binds published fields to provider ports."""
+    frames = _parse_metadata_mapping(raw, key="frames", source=source)
+    if frames.get("policy") != SPATIAL_PORTS_FRAME_POLICY:
+        return frames
+    raw_ports = frames.get("ports")
+    if not isinstance(raw_ports, dict) or not raw_ports:
+        raise InterfaceSpecError(f"frames.policy spatial_ports requires a non-empty frames.ports mapping in {source}")
+    ports: dict[str, str] = {}
+    for raw_field, raw_port in raw_ports.items():
+        field_name = raw_field.strip() if isinstance(raw_field, str) else ""
+        port = raw_port.strip() if isinstance(raw_port, str) else ""
+        if not field_name or not port:
+            raise InterfaceSpecError(f"frames.ports must map message field names to spatial port names in {source}")
+        ports[field_name] = port
+    published = [event for event in events if event.direction == "publish"]
+    if not published:
+        raise InterfaceSpecError(f"frames.policy spatial_ports requires a published event in {source}")
+    for event in published:
+        message = _published_message(spec_id, event.type, messages)
+        if message is None:
+            raise InterfaceSpecError(
+                f"frames.ports cannot be checked: message {event.type} of event '{event.topic}' is not found in {source}"
+            )
+        fields = {field.name: field for field in message.fields}
+        for field_name in ports:
+            field = fields.get(field_name)
+            if field is None or field.optional or field.type not in _STRING_TYPES:
+                raise InterfaceSpecError(
+                    f"frames.ports field '{field_name}' must be a required string field of {event.type} "
+                    f"(event '{event.topic}') in {source}"
+                )
+    return {**frames, "ports": ports}
+
+
+def _published_message(spec_id: str, type_ref: str, messages: dict[str, MessageSpec]) -> MessageSpec | None:
+    namespace, separator, message_name = type_ref.partition("/")
+    if not separator:
+        return messages.get(type_ref)
+    if namespace == spec_id:
+        return messages.get(message_name)
+    try:
+        path = resolve_spec_path(relative_spec_path("messages", namespace))
+    except ValueError:
+        return None
+    if path is None:
+        return None
+    document = yaml.safe_load(read_spec_text(path)) or {}
+    if not isinstance(document, dict):
+        return None
+    message_set = _parse_interface_spec(document, source=str(path))
+    if message_set.id != namespace:
+        return None
+    return message_set.messages.get(message_name)
 
 
 def _endpoint_items(document: dict[str, Any], key: str, *, source: str) -> list[Any]:

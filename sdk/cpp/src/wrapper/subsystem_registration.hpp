@@ -315,6 +315,12 @@ bool Subsystem::register_event_identity(const EventTopicInfo& info, bool publish
 bool Subsystem::publish_event(const std::string& topic,
                               const EventPayload& payload,
                               std::int64_t timestamp_ns) {
+    if (const auto checks = published_frame_checks_.find(topic); checks != published_frame_checks_.end()) {
+        if (const auto refusal = published_frame_mismatch(topic, payload, checks->second)) {
+            logger_.error(kEventTag, *refusal);
+            return false;
+        }
+    }
     if (!ensure_core_client("publish_event")) {
         return false;
     }

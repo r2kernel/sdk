@@ -15,13 +15,18 @@ import uuid
 from pathlib import Path
 
 SDK_ROOT = Path(__file__).resolve().parents[1]
+TESTS_DIR = Path(__file__).resolve().parent
 
 # A provider process: starts the local handler server (registration with Control stubbed), reports the
-# handler socket, then waits or exits.
+# handler socket, then waits or exits. A handler-thread exception is recorded and reported instead of being
+# printed, so it fails the test rather than racing interpreter shutdown on stderr.
 PROVIDER = textwrap.dedent('''
     import signal, sys, threading, time
     from r2kernel.core.native_control import NativeControlClient
+    from control_shm_support import _install_provider_shm_state
 
+    thread_errors = []
+    threading.excepthook = lambda args: thread_errors.append(f"{args.exc_type.__name__}: {args.exc_value}")
     mode, identity = sys.argv[1], sys.argv[2]
     if mode == "own-handler":
         signal.signal(signal.SIGTERM, lambda *_: sys.exit(7))
@@ -33,6 +38,7 @@ PROVIDER = textwrap.dedent('''
     client._server_ready = threading.Event()
     client._server_connection_threads = set()
     client._server_connection_threads_lock = threading.Lock()
+    _install_provider_shm_state(client)
     client._local_endpoint = None
     client._apply_local_ipc_socket_policy = lambda path: None
     client._register_managed_handler = lambda: 1
@@ -55,7 +61,8 @@ PROVIDER = textwrap.dedent('''
         print(json.dumps({"child": child, "exists": os.path.exists(client._local_endpoint),
                           "server_alive": client._server_thread.is_alive()}), flush=True)
         client.stop_server()
-        print(json.dumps({"exists_after_parent_stop": os.path.exists(client._local_endpoint or "")}), flush=True)
+        print(json.dumps({"exists_after_parent_stop": os.path.exists(client._local_endpoint or ""),
+                          "thread_errors": thread_errors}), flush=True)
         sys.exit(0)
     while True:
         time.sleep(0.2)
@@ -87,7 +94,7 @@ WORKER_FIRST = textwrap.dedent('''
 class ControlHandlerSocketLifetimeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.env = dict(os.environ, R2KERNEL_FORCE_PYTHON="1",
-                        PYTHONPATH=os.pathsep.join([str(SDK_ROOT), os.environ.get("PYTHONPATH", "")]))
+                        PYTHONPATH=os.pathsep.join([str(SDK_ROOT), str(TESTS_DIR), os.environ.get("PYTHONPATH", "")]))
         self.endpoints: list[str] = []
 
     def tearDown(self) -> None:
@@ -131,6 +138,9 @@ class ControlHandlerSocketLifetimeTests(unittest.TestCase):
         after_child = process.stdout.readline().strip()
         self.assertTrue(after_child, process.stderr.read() if not after_child else after_child)
         self.assertEqual(json.loads(after_child), {"child": 0, "exists": True, "server_alive": True})
+        after_parent = process.stdout.readline().strip()
+        self.assertTrue(after_parent, process.stderr.read() if not after_parent else after_parent)
+        self.assertEqual(json.loads(after_parent), {"exists_after_parent_stop": False, "thread_errors": []})
         self.assertEqual(process.wait(timeout=10), 0)
         self.assertFalse(os.path.exists(endpoint), "the parent still removes its own socket")
 

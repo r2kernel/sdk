@@ -29,7 +29,7 @@ class CodecNode(ctypes.Structure):
 
 def _check(result: int, operation: str) -> None:
     if result != 0:
-        raise RuntimeError(f'{operation} failed (r2kernel-core error {result})')
+        raise RuntimeError(f'{operation} failed (r2kernel-comm error {result})')
 
 
 def _bind(lib: Any) -> None:
@@ -51,7 +51,7 @@ def _bind(lib: Any) -> None:
         try:
             function = getattr(lib, name)
         except AttributeError as exc:
-            raise RuntimeError('Prepared codecs require the updated r2kernel-core library') from exc
+            raise RuntimeError('Prepared codecs require the updated r2kernel-comm library') from exc
         function.argtypes = args
         function.restype = None if name.endswith('_free') else ctypes.c_int
     lib.r2kernel_codec_output_bytes.restype = ctypes.c_void_p

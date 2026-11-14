@@ -21,6 +21,12 @@ from r2kernel.core.native_control import NativeControlClient
 from test_control_shm import _test_policy, _request_lease, _transact_response_frame
 
 
+@pytest.fixture(autouse=True)
+def development_peer_authority(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The fake Control servers here have no root broker: use the documented development mode."""
+    monkeypatch.setenv("R2KERNEL_RESOURCE_SERVICE_MODE", "disabled")
+
+
 def exchange(channel, payload=b'first', timeout_s=1, result_ready=True):
     return channel.exchange(
         request_builder=lambda lease: encode_transact_request(

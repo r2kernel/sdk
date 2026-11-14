@@ -28,9 +28,12 @@ std::vector<std::string> interface_api_ids(
     bool include_internal_contracts = false
 );
 void validate_manifest_role_policy(const SubsystemManifest& manifest);
+// Published topic -> frame checks of the provided spatial_ports APIs.
+using PublishedFrameChecks = std::unordered_map<std::string, std::vector<detail::PublishedFrameCheck>>;
 // Defined in subsystem_spatial.hpp.
 SpatialDeclaration parse_spatial_declaration(const YAML::Node& value, const std::filesystem::path& manifest_path);
 void validate_subsystem_spatial_conformance(const SubsystemManifest& manifest);
+PublishedFrameChecks provided_frame_checks(const SubsystemManifest& manifest);
 std::string spatial_status_json(const SpatialDeclaration& spatial);
 // Defined in subsystem_deployment.hpp.
 SubsystemManifest load_package_subsystem_manifest(const std::filesystem::path& path,
@@ -463,6 +466,7 @@ SubsystemManifest parse_subsystem_manifest_file(const std::filesystem::path& pat
     manifest.spatial = parse_spatial_declaration(doc["spatial"], path);
     validate_manifest_role_policy(manifest);
     validate_subsystem_spatial_conformance(manifest);
+    (void)provided_frame_checks(manifest);
     return manifest;
 }
 
@@ -689,6 +693,20 @@ std::string type_basename(std::string_view ref) {
     return std::string(ref.substr(slash + 1));
 }
 
+// A "<namespace>.vN/<Message>" reference.
+bool type_ref_has_versioned_namespace(const std::string& ref) {
+    const auto slash = ref.find('/');
+    if (slash == std::string::npos) return false;
+    const std::string namespace_id = ref.substr(0, slash);
+    const auto dot = namespace_id.rfind('.');
+    const std::string suffix = dot == std::string::npos ? namespace_id : namespace_id.substr(dot + 1);
+    return suffix.size() >= 2 && suffix[0] == 'v'
+        && std::all_of(suffix.begin() + 1, suffix.end(), [](char ch) { return std::isdigit(static_cast<unsigned char>(ch)) != 0; });
+}
+
+// Two fully versioned references match only exactly, as in the Python SDK:
+// msg.locomotion.mobile_base.v2/Odometry is not v1's Odometry. A local or
+// unversioned reference still matches by message name.
 bool matches_type_ref(std::string_view actual, std::string_view expected) {
     const std::string lhs = trim_copy(std::string(actual));
     const std::string rhs = trim_copy(std::string(expected));
@@ -697,6 +715,9 @@ bool matches_type_ref(std::string_view actual, std::string_view expected) {
     }
     if (lhs == rhs) {
         return true;
+    }
+    if (type_ref_has_versioned_namespace(lhs) && type_ref_has_versioned_namespace(rhs)) {
+        return false;
     }
     return type_basename(lhs) == type_basename(rhs);
 }

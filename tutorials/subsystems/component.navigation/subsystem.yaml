@@ -11,7 +11,7 @@ requires:
     cardinality: one
     required: true
   mobility:
-    contract: component.mobile_base.odometry.v1
+    contract: component.mobile_base.odometry.v2
     cardinality: one
     required: true
 

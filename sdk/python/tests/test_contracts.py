@@ -382,18 +382,25 @@ spatial:
             self.assertLess(candidates.index(first), candidates.index(second))
             self.assertLess(candidates.index(second), candidates.index(root))
 
-    def test_discovers_composition_spec_root_from_nested_package_directory(self) -> None:
+    def test_only_the_working_directory_spec_roots_are_searched(self) -> None:
+        # As in the runtime core and the C++ SDK, a spec root in an ancestor of
+        # the working directory is not a candidate (cross-audit SDK-112-03).
         with tempfile.TemporaryDirectory() as tmpdir:
             composition = Path(tmpdir) / "tutorials"
-            shared_spec = composition / "spec"
+            ancestor_spec = composition / "spec"
             package_dir = composition / "subsystems" / "component.mobile"
-            shared_spec.mkdir(parents=True)
-            package_dir.mkdir(parents=True)
+            ancestor_spec.mkdir(parents=True)
+            (package_dir / "spec").mkdir(parents=True)
+            (package_dir / "r2kernel-spec").mkdir()
 
-            with patch("r2kernel.spec_paths.Path.cwd", return_value=package_dir):
+            with patch.dict(os.environ, {}, clear=False), \
+                    patch("r2kernel.spec_paths.Path.cwd", return_value=package_dir):
+                for name in ("R2KERNEL_CONTRACT_SPEC_ROOTS", "R2KERNEL_SPEC_PATH", "R2KERNEL_SPEC_ROOT"):
+                    os.environ.pop(name, None)
                 candidates = spec_root_candidates()
 
-            self.assertIn(shared_spec, candidates)
+            self.assertNotIn(ancestor_spec, candidates)
+            self.assertEqual(candidates[:2], (package_dir / "r2kernel-spec", package_dir / "spec"))
 
     def test_loads_component_and_api_contract_from_spec_path_overlay(self) -> None:
         with tempfile.TemporaryDirectory() as component_dir, tempfile.TemporaryDirectory() as api_contract_dir:

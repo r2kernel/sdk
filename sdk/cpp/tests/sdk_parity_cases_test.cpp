@@ -183,6 +183,11 @@ int main() {
     const fs::path scratch = fs::temp_directory_path() / ("r2kernel-sdk-parity-" + std::to_string(::getpid()));
     fs::create_directories(scratch);
     ::setenv("R2KERNEL_RESOURCE_SERVICE_MODE", "disabled", 1);
+#ifdef R2KERNEL_SDK_SPEC_DIR
+    // The installed standard dictionary the package spec-root cases compare
+    // with; the Python SDK finds the same tree beside its sources.
+    ::setenv("R2KERNEL_SPEC_ROOT", R2KERNEL_SDK_SPEC_DIR, 0);
+#endif
     int failures = 0;
     try {
         failures += validation_cases(parity, "manifest-validation.yaml", scratch);

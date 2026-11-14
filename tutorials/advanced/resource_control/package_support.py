@@ -21,22 +21,29 @@ def write_gateway_manifest(package_dir: Path, name: str) -> None:
 
 
 def sdk_python_dir(script: str, repo_root: str | None) -> Path:
-    """Python SDK source directory for the generated package's ``PYTHONPATH``.
+    """Python SDK directory for the generated package's ``PYTHONPATH``.
 
-    ``repo_root`` is the checkout containing ``sdk/python`` (the public SDK
-    repository root). Without it, the checkout that contains this tutorial is
-    used. A root without ``sdk/python/r2kernel`` is refused.
+    ``repo_root`` is a checkout containing ``sdk/python`` (the public SDK
+    repository root) or an installation prefix. A checkout holds the SDK
+    sources in ``sdk/python/r2kernel``; the installer puts the SDK in
+    ``sdk/python/site-packages``. Without ``repo_root``, the checkout or
+    prefix that contains this tutorial is used. A root with neither layout is
+    refused.
     """
     if repo_root:
         roots = [Path(repo_root).resolve()]
     else:
         roots = [parent for parent in Path(script).resolve().parents if (parent / "sdk" / "python").is_dir()][:1]
     for root in roots:
-        sdk = root / "sdk" / "python"
-        if (sdk / "r2kernel").is_dir():
-            return sdk
+        python = root / "sdk" / "python"
+        for sdk in (python, python / "site-packages"):
+            if (sdk / "r2kernel").is_dir():
+                return sdk
     checked = ", ".join(str(root) for root in roots) or f"the parents of {script}"
-    raise SystemExit(f"Python SDK sources (sdk/python/r2kernel) not found under {checked}; pass --repo-root.")
+    raise SystemExit(
+        "Python SDK (sdk/python/r2kernel or sdk/python/site-packages/r2kernel) "
+        f"not found under {checked}; pass --repo-root."
+    )
 
 
 def prepare_package(out: str, script_dir: Path, probe: str) -> Path:

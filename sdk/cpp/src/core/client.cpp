@@ -9,8 +9,8 @@
 #include "control_registration.hpp"
 #include "control_shm_peer_reset.hpp"
 
-#include "r2kernel_core.h"
-#include "r2kernel_core_control.h"
+#include "r2kernel_comm.h"
+#include "r2kernel_comm_control.h"
 #include <yaml-cpp/yaml.h>
 #include <array>
 

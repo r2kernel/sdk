@@ -1,5 +1,5 @@
-#ifndef R2KERNEL_CORE_H
-#define R2KERNEL_CORE_H
+#ifndef R2KERNEL_COMM_H
+#define R2KERNEL_COMM_H
 
 #include <stdint.h>
 #include <stddef.h>
@@ -46,6 +46,8 @@ typedef struct R2KernelEventApplyPlan R2KernelEventApplyPlan;
 // directories
 // deeper than 128 levels, mismatched YAML path IDs, and prepared message graphs
 // or type expressions deeper than 128 levels (-1; filesystem errors return -3).
+// Every container level counts toward the type expression limit: an `_array`
+// suffix as well as `vector<...>` and `array<..., N>`.
 #define R2KERNEL_MAX_PREPARED_SCHEMA_DEPTH 128
 typedef struct R2KernelSchemaContext R2KernelSchemaContext;
 typedef struct R2KernelPreparedCodec R2KernelPreparedCodec;
@@ -390,6 +392,11 @@ int r2kernel_event_client_create(const char* shm_name, size_t slot_size, size_t 
  * same handle; the caller must ensure every other call on that handle has
  * returned before closing it. */
 int r2kernel_event_client_close(R2KernelEventClient* handle);
+/*
+ * A subscription whose last entry slot, slot_index + (queue_depth - 1) *
+ * entry_slot_count (queue_depth and entry_slot_count of at least 1), is not
+ * inside the client's pool is refused with InvalidArgument (-1).
+ */
 int r2kernel_event_client_subscribe(R2KernelEventClient* handle, const char* topic, const char* publisher, size_t slot_index, const char* lock_name);
 int r2kernel_event_client_subscribe_ex(R2KernelEventClient* handle, const char* topic, const char* publisher, size_t slot_index, size_t queue_depth, size_t entry_slot_count, const char* lock_name);
 int r2kernel_event_client_subscribe_latest_ex(R2KernelEventClient* handle, const char* topic, const char* publisher, size_t slot_index, size_t queue_depth, size_t entry_slot_count, const char* lock_name);
@@ -695,4 +702,4 @@ int r2kernel_lock_wait(R2KernelLockHandle* handle, int64_t timeout_ms);
 }
 #endif
 
-#endif // R2KERNEL_CORE_H
+#endif // R2KERNEL_COMM_H

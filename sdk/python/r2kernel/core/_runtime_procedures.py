@@ -17,6 +17,20 @@ from ._runtime_common import _OPERATION_TERMINAL_STATES
 _OPERATION_SHUTDOWN_GRACE_S = 1.0
 
 
+def _procedure_transport_failure(result: dict[str, Any], default_message: str) -> tuple[str, str]:
+    """The documented error code and a message for a failed Procedure exchange.
+
+    As in the C++ SDK, no reply before the deadline is ``timeout`` and a reply
+    with a nonzero Control channel status is ``procedure_transport_failed``;
+    the transport's own reason stays in the message (cross-audit SDK-112-02).
+    """
+    response = result.get("response") or {}
+    payload = response.get("payload") or b""
+    text = payload.decode("utf-8", errors="replace") if isinstance(payload, (bytes, bytearray)) else ""
+    code = "timeout" if result.get("timeout") or not response else "procedure_transport_failed"
+    return code, text or str(result.get("error") or default_message)
+
+
 class _ProcedureMixin:
     """Procedure/operation registration, server lifecycle and procedure client calls of SubsystemRuntime."""
 
@@ -327,11 +341,12 @@ class _ProcedureMixin:
         )
         if not result.get("ok"):
             self._invalidate_control_target(target)
+            error_code, error_message = _procedure_transport_failure(result, "procedure transport failed")
             return {
                 "ok": False,
                 "request_id": request_id,
-                "error_code": str(result.get("error") or "timeout"),
-                "error_message": str(result.get("error") or "procedure transport failed"),
+                "error_code": error_code,
+                "error_message": error_message,
             }
 
         response = result.get("response") or {}
@@ -421,15 +436,11 @@ class _ProcedureMixin:
         )
         if not result.get("ok"):
             self._invalidate_control_target(target)
-            response = result.get("response") or {}
-            payload = response.get("payload") or b""
-            message = ""
-            if isinstance(payload, (bytes, bytearray)) and payload:
-                message = payload.decode("utf-8", errors="replace")
+            error_code, error_message = _procedure_transport_failure(result, "typed procedure transport failed")
             return {
                 "ok": False,
-                "error_code": str(result.get("error") or "procedure_transport_failed"),
-                "error_message": message or str(result.get("error") or "typed procedure transport failed"),
+                "error_code": error_code,
+                "error_message": error_message,
             }
 
         response = result.get("response") or {}
@@ -536,8 +547,9 @@ class _ProcedureMixin:
         }
         if not result.get("ok"):
             self._invalidate_control_target(target)
-            summary["error_code"] = str(result.get("error") or "procedure_transport_failed")
-            summary["error_message"] = str(result.get("error") or "typed timed procedure transport failed")
+            summary["error_code"], summary["error_message"] = _procedure_transport_failure(
+                result, "typed timed procedure transport failed",
+            )
             summary["procedure_response"] = {
                 "ok": False,
                 "error_code": summary["error_code"],

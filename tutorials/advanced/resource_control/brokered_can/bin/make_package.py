@@ -15,7 +15,7 @@ def main() -> int:
     parser.add_argument("--out", required=True)
     parser.add_argument("--interface", required=True)
     parser.add_argument("--result-file")
-    parser.add_argument("--repo-root", help="Checkout containing sdk/python (default: the checkout containing this tutorial).")
+    parser.add_argument("--repo-root", help="Checkout or installation prefix containing sdk/python (default: the one containing this tutorial).")
     parser.add_argument("--receive-own-messages", action="store_true")
     parser.add_argument("--can-fd-frames", action="store_true")
     parser.add_argument("--blocking", action="store_true")

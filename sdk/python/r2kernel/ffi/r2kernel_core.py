@@ -81,11 +81,11 @@ class R2KernelCore:
     @staticmethod
     def _lib_filenames() -> list[str]:
         if sys.platform == "darwin":
-            return ["libr2kernel_core.dylib"]
+            return ["libr2kernel_comm.dylib"]
         if sys.platform.startswith("linux"):
-            return ["libr2kernel_core.so"]
+            return ["libr2kernel_comm.so"]
         if sys.platform == "win32":
-            return ["r2kernel_core.dll"]
+            return ["r2kernel_comm.dll"]
         raise RuntimeError(f"Unsupported platform: {sys.platform}")
 
     def _bind_signatures(self):
